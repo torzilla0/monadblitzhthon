@@ -110,12 +110,26 @@ async function main() {
   });
 
   const ids = cities.map((_, i) => idOf(i));
+
+  // Estimate, then add 20%. Monad charges value + gas_price * gas_LIMIT, so a
+  // lazy 5M limit really costs 0.6 MON a run -- and this script is also the
+  // rehearsal reset, so we want it cheap enough to run many times.
+  const est = await pub.estimateContractGas({
+    address,
+    abi,
+    functionName: "seedWants",
+    args: [ids, wants],
+    account: admin,
+  });
+  const gas = (est * 120n) / 100n;
+  console.log(`seedWants estimate ${est} -> limit ${gas}`);
+
   const hash2 = await wallet.writeContract({
     address,
     abi,
     functionName: "seedWants",
     args: [ids, wants],
-    gas: 5_000_000n,
+    gas,
     ...FEES,
   });
   const r2 = await pub.waitForTransactionReceipt({ hash: hash2 });

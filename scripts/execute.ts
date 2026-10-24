@@ -68,12 +68,25 @@ async function main() {
   const wallet = createWalletClient({ account, chain: monadTestnet, transport: http(RPC_URL) });
 
   const before = await pub.getBalance({ address: account.address });
+
+  // Estimate and add 20%. Monad charges on the gas LIMIT, so a loose limit is
+  // money burned -- a flat 3M limit cost 0.36 MON per run.
+  const est = await pub.estimateContractGas({
+    address,
+    abi,
+    functionName: "executeCycle",
+    args: [target],
+    account,
+  });
+  const gas = (est * 120n) / 100n;
+  console.log(`\nestimate ${est} -> limit ${gas}`);
+
   const hash = await wallet.writeContract({
     address,
     abi,
     functionName: "executeCycle",
     args: [target],
-    gas: 3_000_000n,
+    gas,
     ...FEES,
   });
   const rcpt = await pub.waitForTransactionReceipt({ hash });
