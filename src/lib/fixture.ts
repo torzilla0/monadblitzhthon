@@ -6,6 +6,7 @@ import {
   type Item,
   type Cycle,
 } from "./halka";
+import { ALL_CITIES } from "./cities";
 
 export { HALKA_ABI, HALKA_ADDRESS, monadTestnet, RPC_URL };
 export type { Item, Cycle };
@@ -16,29 +17,34 @@ export const MONAD_TESTNET = {
   explorer: "https://testnet.monadscan.com",
 } as const;
 
+// 11 kişilik döngünün gerçek Monad Testnet yürütme kanıtı (tx hash)
+export const PROOF_11_CYCLE_TX =
+  "0xba04c5bd56c4344ee650aac9005a268f78f817101ac05c621b587bf567998bd9" as const;
+
 export const FALLBACK_HALKA_ADDRESS = HALKA_ADDRESS;
 export const FALLBACK_HALKA_ABI = HALKA_ABI;
 
-// Türkiye Şehir Koordinatları (lat, lon)
+// Türkiye Şehir Koordinatları (src/lib/cities.ts + ek şehirler birleşimi)
 export const FIXTURE_CITIES: Record<string, { lat: number; lon: number }> = {
+  ...Object.fromEntries(ALL_CITIES.map((c) => [c.name, { lat: c.lat, lon: c.lon }])),
   Hakkari: { lat: 37.5744, lon: 43.7408 },
   Ankara: { lat: 39.9334, lon: 32.8597 },
   Izmir: { lat: 38.4237, lon: 27.1428 },
   Trabzon: { lat: 41.0027, lon: 39.7168 },
   Gaziantep: { lat: 37.0662, lon: 37.3833 },
   Van: { lat: 38.4891, lon: 43.4089 },
-  Bursa: { lat: 40.1885, lon: 29.061 },
+  Bursa: { lat: 40.1826, lon: 29.0665 },
   Konya: { lat: 37.8746, lon: 32.4932 },
   Samsun: { lat: 41.2867, lon: 36.33 },
   Diyarbakir: { lat: 37.9144, lon: 40.2306 },
   Antalya: { lat: 36.8969, lon: 30.7133 },
-  // 3'lü ikincil halka şehirleri
   Erzurum: { lat: 39.9043, lon: 41.2679 },
   Eskisehir: { lat: 39.7767, lon: 30.5206 },
   Adana: { lat: 37.0, lon: 35.3213 },
-  // Gürültü (noise) şehirleri - gerçekçi Türkiye dağılımı
   Istanbul: { lat: 41.0082, lon: 28.9784 },
   Kayseri: { lat: 38.7312, lon: 35.4787 },
+  Mersin: { lat: 36.8121, lon: 34.6415 },
+  Denizli: { lat: 37.7765, lon: 29.0864 },
   Mardin: { lat: 37.3212, lon: 40.7245 },
   Malatya: { lat: 38.3552, lon: 38.3095 },
   Canakkale: { lat: 40.1553, lon: 26.4142 },

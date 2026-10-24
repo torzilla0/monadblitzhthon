@@ -6,8 +6,10 @@ import {
   type Cycle,
   FIXTURE_CITIES,
   MONAD_TESTNET,
+  PROOF_11_CYCLE_TX,
   normalizeCityKey,
 } from "../lib/fixture";
+import { cityOfLabel } from "../lib/cities";
 
 interface TurkeyMapProps {
   items: Item[];
@@ -24,10 +26,10 @@ interface TurkeyMapProps {
   customCities?: Record<string, { lat: number; lon: number }>;
 }
 
-// Türkiye coğrafi sınırları -> SVG (1000 x 520) doğrusal projeksiyon
+// Türkiye coğrafi sınırları -> SVG (1000 x 500) doğrusal projeksiyon
 const SVG_WIDTH = 1000;
 const SVG_HEIGHT = 500;
-const LON_MIN = 25.6;
+const LON_MIN = 25.5;
 const LON_MAX = 45.0;
 const LAT_MIN = 35.6;
 const LAT_MAX = 42.3;
@@ -38,46 +40,45 @@ function projectLatLon(lat: number, lon: number): { x: number; y: number } {
   return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
 }
 
-// Basitleştirilmiş Türkiye ana kara + Trakya SVG dış hat poligonu (gerçek koordinatlardan projekte)
 const TURKEY_OUTLINE_COORDS: [number, number][] = [
-  [41.67, 26.55], // Edirne
-  [41.98, 28.02], // Kırklareli / İğneada
-  [41.25, 29.05], // İstanbul Boğazı
-  [41.18, 29.61], // Şile
-  [41.32, 31.42], // Ereğli
-  [41.45, 31.79], // Zonguldak
-  [42.02, 33.33], // İnebolu
-  [42.02, 35.15], // Sinop
-  [41.29, 36.33], // Samsun
-  [41.02, 37.88], // Ordu
-  [41.0, 39.72], // Trabzon
-  [41.02, 40.52], // Rize
-  [41.52, 41.55], // Hopa
-  [41.15, 42.7], // Ardahan
-  [40.6, 43.5], // Kars doğu
-  [39.95, 44.52], // Iğdır / Ağrı
-  [38.49, 44.3], // Van doğu
-  [37.35, 44.55], // Şemdinli / Hakkari
-  [37.25, 43.3], // Hakkari batı
-  [37.15, 42.3], // Şırnak / Cizre
-  [37.05, 41.2], // Nusaybin / Mardin
-  [36.75, 38.9], // Akçakale / Şanlıurfa
-  [36.7, 37.1], // Kilis
-  [36.05, 36.15], // Hatay / Samandağ
-  [36.58, 36.17], // İskenderun
-  [36.8, 35.4], // Karataş / Adana
-  [36.08, 32.83], // Anamur
-  [36.54, 32.0], // Alanya
-  [36.89, 30.71], // Antalya
-  [36.2, 29.64], // Kaş
-  [36.62, 29.11], // Fethiye
-  [36.7, 27.43], // Datça / Bodrum
-  [37.86, 27.26], // Kuşadası
-  [38.32, 26.3], // Çeşme / İzmir
-  [39.58, 26.08], // Babakale / Çanakkale
-  [40.04, 26.18], // Çanakkale Boğazı
-  [40.6, 26.8], // Gelibolu / Saros
-  [40.85, 26.05], // Enez
+  [41.67, 26.55],
+  [41.98, 28.02],
+  [41.25, 29.05],
+  [41.18, 29.61],
+  [41.32, 31.42],
+  [41.45, 31.79],
+  [42.02, 33.33],
+  [42.02, 35.15],
+  [41.29, 36.33],
+  [41.02, 37.88],
+  [41.0, 39.72],
+  [41.02, 40.52],
+  [41.52, 41.55],
+  [41.15, 42.7],
+  [40.6, 43.5],
+  [39.95, 44.52],
+  [38.49, 44.3],
+  [37.35, 44.55],
+  [37.25, 43.3],
+  [37.15, 42.3],
+  [37.05, 41.2],
+  [36.75, 38.9],
+  [36.7, 37.1],
+  [36.05, 36.15],
+  [36.58, 36.17],
+  [36.8, 35.4],
+  [36.08, 32.83],
+  [36.54, 32.0],
+  [36.89, 30.71],
+  [36.2, 29.64],
+  [36.62, 29.11],
+  [36.7, 27.43],
+  [37.86, 27.26],
+  [38.32, 26.3],
+  [39.58, 26.08],
+  [40.04, 26.18],
+  [40.6, 26.8],
+  [40.85, 26.05],
 ];
 
 const TEACHER_NAMES: Record<number, string> = {
@@ -95,6 +96,12 @@ const TEACHER_NAMES: Record<number, string> = {
   12: "Öğr. Oğuz R.",
   13: "Öğr. Derya P.",
   14: "Öğr. Hakan V.",
+  15: "Öğr. Aslı G.",
+  16: "Öğr. Kerem U.",
+  17: "Öğr. İlknur Z.",
+  18: "Öğr. Murat Ş.",
+  19: "Öğr. Pelin C.",
+  20: "Öğr. Tolga E.",
 };
 
 export default function TurkeyMap({
@@ -123,14 +130,15 @@ export default function TurkeyMap({
     cycleItems: number[];
     swappedTeachers: Record<number, string>;
   } | null>(null);
-  const [revertProofMessage, setRevertProofMessage] = useState<string | null>(null);
+  const [revertProofMessage, setRevertProofMessage] = useState<string | null>(
+    null
+  );
   const [teacherAssignments, setTeacherAssignments] =
     useState<Record<number, string>>(TEACHER_NAMES);
 
   const activeCycle: Cycle | null =
     cycles[activeCycleIndex] || cycles[0] || null;
 
-  // Türkiye haritası SVG path
   const turkeyPathD = useMemo(() => {
     const pts = TURKEY_OUTLINE_COORDS.map(([lat, lon]) =>
       projectLatLon(lat, lon)
@@ -141,21 +149,29 @@ export default function TurkeyMap({
     );
   }, []);
 
-  // Her item için koordinat hesapla
+  // Her item için koordinat hesapla (önce backend'in cityOfLabel fonksiyonu, sonra normalize sözlük)
   const itemCoords = useMemo(() => {
-    const map = new Map<number, { x: number; y: number; cityName: string }>();
+    const map = new Map<
+      number,
+      { x: number; y: number; cityName: string; branchName: string }
+    >();
     items.forEach((item, idx) => {
+      const parts = item.label.split("/");
+      const cityName = parts[0]?.trim() || item.label;
+      const branchName = parts[1]?.trim() || "Matematik";
+
+      const fromBackendCity = cityOfLabel(item.label);
       const key = normalizeCityKey(item.label);
-      const coord = citiesDict[key];
+      const coord = fromBackendCity || citiesDict[key];
+
       if (coord) {
         const { x, y } = projectLatLon(coord.lat, coord.lon);
-        map.set(item.id, { x, y, cityName: item.label.split("/")[0].trim() });
+        map.set(item.id, { x, y, cityName, branchName });
       } else {
-        // Bilinmeyen şehir gelirse deterministik olarak Anadolu içine yerleştir
         const fallbackLat = 37.5 + ((idx * 17) % 35) / 10;
         const fallbackLon = 28.0 + ((idx * 29) % 140) / 10;
         const { x, y } = projectLatLon(fallbackLat, fallbackLon);
-        map.set(item.id, { x, y, cityName: item.label.split("/")[0].trim() });
+        map.set(item.id, { x, y, cityName, branchName });
       }
     });
     return map;
@@ -187,14 +203,11 @@ export default function TurkeyMap({
     if (!activeCycle || isExecuting) return;
     setRevertProofMessage(null);
     setIsExecuting(true);
-
-    // Eğer halka henüz yakılmadıysa tüm kenarlarını yak
     setLitEdgeCount(activeCycle.items.length);
 
     try {
       const res = await onExecuteCycle(activeCycle);
 
-      // Öğretmen atamalarını döngü boyunca atomik olarak kaydır
       const n = activeCycle.items.length;
       const nextAssignments = { ...teacherAssignments };
       const swappedRecord: Record<number, string> = {};
@@ -223,7 +236,7 @@ export default function TurkeyMap({
 
   const handleRevertSimulation = () => {
     setRevertProofMessage(
-      'REVERT KANITI: "executeCycle([1, 2, 15])" çağrıldı -> Kadro #15 (İstanbul), Kadro #1 (Hakkari) kadrosunu istemediği için (_rank[15][1] == 0) işlem zincir üstünde tamamen REVERT etti. 0/3 transfer gerçekleşti; kimse açıkta kalmadı.'
+      'REVERT KANITI: "executeCycle([1, 2, 12])" çağrıldı -> Kadro #12 (İstanbul), Kadro #1 (Hakkari) kadrosunu istemediği için (_rank[12][1] == 0 -> WantMissing) işlem zincir üstünde tamamen REVERT etti. 0/3 transfer gerçekleşti; kimse açıkta kalmadı.'
     );
   };
 
@@ -236,7 +249,6 @@ export default function TurkeyMap({
     onResetDemo();
   };
 
-  // Döngü kenarları ve aktif düğüm kümesi
   const cycleNodeOrder = useMemo(() => {
     const order = new Map<number, number>();
     if (!activeCycle || litEdgeCount === 0) return order;
@@ -292,7 +304,7 @@ export default function TurkeyMap({
                     : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-zinc-500"
                 }`}
               >
-                2. Halka ({cycles[1].items.length}&apos;lü)
+                2. Halka ({cycles[1].items.length}&apos;li)
               </button>
             )}
 
@@ -334,7 +346,6 @@ export default function TurkeyMap({
             className="w-full h-full select-none"
           >
             <defs>
-              {/* İnce gri ok ucu (tüm tercihler) */}
               <marker
                 id="arrow-muted"
                 viewBox="0 0 10 10"
@@ -344,10 +355,13 @@ export default function TurkeyMap({
                 markerHeight="5"
                 orient="auto-start-reverse"
               >
-                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#52525b" opacity="0.65" />
+                <path
+                  d="M 0 1.5 L 8 5 L 0 8.5 z"
+                  fill="#52525b"
+                  opacity="0.65"
+                />
               </marker>
 
-              {/* Parlayan Halka Ok Ucu (Monad Moru) */}
               <marker
                 id="arrow-cycle"
                 viewBox="0 0 10 10"
@@ -360,7 +374,6 @@ export default function TurkeyMap({
                 <path d="M 0 1 L 9 5 L 0 9 z" fill="#a78bfa" />
               </marker>
 
-              {/* Yürütülmüş Halka Ok Ucu (Zümrüt Yeşili) */}
               <marker
                 id="arrow-executed"
                 viewBox="0 0 10 10"
@@ -373,7 +386,13 @@ export default function TurkeyMap({
                 <path d="M 0 1 L 9 5 L 0 9 z" fill="#34d399" />
               </marker>
 
-              <filter id="glow-purple" x="-20%" y="-20%" width="140%" height="140%">
+              <filter
+                id="glow-purple"
+                x="-20%"
+                y="-20%"
+                width="140%"
+                height="140%"
+              >
                 <feGaussianBlur stdDeviation="3.5" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
@@ -424,7 +443,6 @@ export default function TurkeyMap({
                 const toPos = itemCoords.get(targetId);
                 if (!toPos) return null;
 
-                // Hedef düğümün merkezinden biraz geride bitsin
                 const dx = toPos.x - fromPos.x;
                 const dy = toPos.y - fromPos.y;
                 const dist = Math.hypot(dx, dy) || 1;
@@ -470,7 +488,6 @@ export default function TurkeyMap({
 
                 return (
                   <g key={`cycle-edge-${fromId}-${toId}`}>
-                    {/* Parlama Arka Plan Çizgisi */}
                     <line
                       x1={fromPos.x}
                       y1={fromPos.y}
@@ -481,7 +498,6 @@ export default function TurkeyMap({
                       opacity="0.28"
                       strokeLinecap="round"
                     />
-                    {/* Ana Kalın Renkli Halka Oku */}
                     <line
                       x1={fromPos.x}
                       y1={fromPos.y}
@@ -510,7 +526,7 @@ export default function TurkeyMap({
               const isExecutedNode =
                 executedResult?.cycleItems.includes(item.id) ?? false;
               const isKeyStoryCity =
-                item.id === 1 || item.id === 2 || item.id === 3; // Hakkari, Ankara, İzmir
+                item.id === 1 || item.id === 2 || item.id === 3;
 
               const nodeRadius = isInLitCycle ? 9 : isKeyStoryCity ? 7.5 : 5.5;
               const fillColor = isExecutedNode
@@ -532,7 +548,6 @@ export default function TurkeyMap({
                   onClick={() => onSelectItem(item.id)}
                   className="cursor-pointer group"
                 >
-                  {/* Aktif Halka Dış Halesi */}
                   {(isInLitCycle || isSelected) && (
                     <circle
                       cx={pos.x}
@@ -545,7 +560,6 @@ export default function TurkeyMap({
                     />
                   )}
 
-                  {/* Şehir Düğümü */}
                   <circle
                     cx={pos.x}
                     cy={pos.y}
@@ -555,7 +569,6 @@ export default function TurkeyMap({
                     strokeWidth="2"
                   />
 
-                  {/* Halka Sıra Numarası (1..11) */}
                   {stepNum !== undefined && (
                     <text
                       x={pos.x}
@@ -570,16 +583,16 @@ export default function TurkeyMap({
                     </text>
                   )}
 
-                  {/* Şehir ve Kadro Etiketi */}
+                  {/* Şehir ve Branş Etiketi */}
                   <g
                     transform={`translate(${pos.x}, ${
                       pos.y - nodeRadius - 7
                     })`}
                   >
                     <rect
-                      x="-46"
+                      x="-52"
                       y="-15"
-                      width="92"
+                      width="104"
                       height="16"
                       rx="4"
                       fill={
@@ -610,14 +623,13 @@ export default function TurkeyMap({
                           ? "#ede9fe"
                           : "#d4d4d8"
                       }
-                      fontSize="9.5"
+                      fontSize="9"
                       fontWeight={isInLitCycle ? "700" : "500"}
                     >
-                      {pos.cityName}
+                      {pos.cityName} · {pos.branchName.slice(0, 4)}.
                     </text>
                   </g>
 
-                  {/* Öğretmen Atama Etiketi (Sadece aktif halkadaki şehirlerde gösterilir, takas yürütülünce aynı anda değişir) */}
                   {isInLitCycle && (
                     <g
                       transform={`translate(${pos.x}, ${
@@ -658,7 +670,7 @@ export default function TurkeyMap({
                 <span className="text-[#a78bfa] font-semibold mr-1">
                   Halka ({litEdgeCount}/{activeCycle.items.length}):
                 </span>
-                {activeCycle.items.slice(0, litEdgeCount).map((id, idx) => {
+                {activeCycle.items.slice(0, litEdgeCount).map((id) => {
                   const city = itemCoords.get(id)?.cityName || `#${id}`;
                   return (
                     <React.Fragment key={id}>
@@ -696,7 +708,8 @@ export default function TurkeyMap({
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 <span className="text-emerald-200 font-semibold">
-                  Atomik Takas Tamamlandı: {executedResult.cycleItems.length} öğretmen tek işlemde eşzamanlı yer değiştirdi!
+                  Atomik Takas Tamamlandı: {executedResult.cycleItems.length}{" "}
+                  öğretmen tek işlemde eşzamanlı yer değiştirdi!
                 </span>
                 <span className="text-emerald-400/80 font-mono text-[11px]">
                   ({executedResult.latencyMs}ms · EIP-7966 Sync)
@@ -722,8 +735,10 @@ export default function TurkeyMap({
           ) : (
             <div className="flex flex-wrap items-center justify-between w-full text-zinc-400 gap-2">
               <span>
-                💡 <strong>Nasıl Çalışır?</strong> Haritadaki bir şehre tıklayarak tercihlerini düzenleyebilir veya{" "}
-                <strong className="text-white">&ldquo;Halkayı Bul&rdquo;</strong> ile 11 şehirlik döngüyü yakabilirsiniz.
+                💡 <strong>Nasıl Çalışır?</strong> Haritadaki bir şehre
+                tıklayarak tercihlerini düzenleyebilir veya{" "}
+                <strong className="text-white">&ldquo;Halkayı Bul&rdquo;</strong>{" "}
+                ile 11 şehirlik döngüyü yakabilirsiniz.
               </span>
               <button
                 onClick={handleRevertSimulation}
@@ -774,8 +789,9 @@ export default function TurkeyMap({
           <p className="text-xs text-zinc-400 mt-3 leading-relaxed">
             Takas literatürü (Abraham, Blum &amp; Sandholm EC &apos;07) fiziksel
             eşzamanlılık imkânsız olduğu için döngüleri <strong>3 kişide</strong>{" "}
-            keser. Akıllı kontratta eşzamanlılık bedavadır: <strong>11 kişi</strong>{" "}
-            ya aynı işlemde yer değiştirir ya da hiçbiri.
+            keser. Akıllı kontratta eşzamanlılık bedavadır:{" "}
+            <strong>11 kişi</strong> ya aynı işlemde yer değiştirir ya da
+            hiçbiri.
           </p>
         </div>
 
@@ -808,15 +824,15 @@ export default function TurkeyMap({
               <div className="flex items-start gap-2">
                 <span className="text-emerald-400 font-bold">✓</span>
                 <span className="text-zinc-300">
-                  <strong>Strict Core:</strong> Alt koalisyonların bloklayamayacağı
-                  tekil kararlı çözüm.
+                  <strong>Strict Core:</strong> Alt koalisyonların
+                  bloklayamayacağı tekil kararlı çözüm.
                 </span>
               </div>
               <div className="flex items-start gap-2">
                 <span className="text-emerald-400 font-bold">✓</span>
                 <span className="text-zinc-300">
-                  <strong>Strategyproof:</strong> Yalan tercih bildirerek daha iyi
-                  bir kadro almak matematiksel olarak imkânsızdır.
+                  <strong>Strategyproof:</strong> Yalan tercih bildirerek daha
+                  iyi bir kadro almak matematiksel olarak imkânsızdır.
                 </span>
               </div>
               <div className="flex items-start gap-2">
@@ -829,22 +845,23 @@ export default function TurkeyMap({
             </div>
           </div>
 
-          {/* Explorer Kısayolu */}
+          {/* Explorer Kısayolu (Gerçek 11'li döngü yürütme kanıtı tx linki) */}
           <div className="mt-4 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs font-mono">
-            <span className="text-zinc-500">Monad Testnet Explorer:</span>
+            <span className="text-zinc-500">11&apos;li Halka Zincir Kanıtı:</span>
             <a
-              href={
-                executedResult
-                  ? `${MONAD_TESTNET.explorer}/tx/${executedResult.txHash}`
-                  : MONAD_TESTNET.explorer
-              }
+              href={`${MONAD_TESTNET.explorer}/tx/${
+                executedResult ? executedResult.txHash : PROOF_11_CYCLE_TX
+              }`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[#a78bfa] hover:underline"
             >
-              {executedResult
-                ? `tx/${executedResult.txHash.slice(0, 8)}... ↗`
-                : "testnet.monadscan.com ↗"}
+              tx/
+              {(executedResult ? executedResult.txHash : PROOF_11_CYCLE_TX).slice(
+                0,
+                10
+              )}
+              …98bd9 ↗
             </a>
           </div>
         </div>
