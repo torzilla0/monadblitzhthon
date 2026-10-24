@@ -125,7 +125,7 @@ const TURKEY_OUTLINE_COORDS: [number, number][] = [
   [40.85, 26.05],
 ];
 
-const TEACHER_NAMES: Record<number, string> = {
+export const TEACHER_NAMES: Record<number, string> = {
   1: "Öğr. Deniz K.",
   2: "Öğr. Selim A.",
   3: "Öğr. Elif T.",
@@ -286,17 +286,32 @@ export default function TurkeyMap({
 
       if (r.ok) {
         setRevertProofMessage(
-          `Zincir bu halkayı kabul ediyor (${r.transfersThatWouldHappen} transfer).`
+          `Beklenmedik: zincir bu halkayı geçerli buldu (${r.transfersThatWouldHappen} taşınma olurdu).`
         );
         return;
       }
 
-      const who =
-        Array.isArray(r.args) && r.args.length >= 2
-          ? ` (Kadro #${r.args[0]} → #${r.args[1]} tercihi yok)`
-          : "";
+      // Düz Türkçe. Önceki hali "executeCycle([1,2,12]) → TargetNotWanted"
+      // diyordu; kod bilmeyen biri için bu hiçbir şey anlatmıyor.
+      const a =
+        Array.isArray(r.args) && r.args.length >= 2 ? Number(r.args[0]) : null;
+      const b =
+        Array.isArray(r.args) && r.args.length >= 2 ? Number(r.args[1]) : null;
+      const nameOf = (id: number) => {
+        const city = items.find((it) => it.id === id)?.label.split("/")[0].trim();
+        return `${teacherAssignments[id] ?? `#${id}`}${city ? ` (${city})` : ""}`;
+      };
+
+      const sebep =
+        a !== null && b !== null
+          ? `${nameOf(a)}, ${nameOf(b)} kadrosunu tercih listesine hiç yazmamış.`
+          : "Halkadaki bağlardan biri geçersiz.";
+
       setRevertProofMessage(
-        `ZİNCİR CEVABI: executeCycle([1, 2, 12]) → ${r.error}${who} · ${r.transfersThatHappened}/3 transfer gerçekleşti, işlem tamamen revert etti.`
+        `Kasten bozuk bir halka denedik: üç öğretmeni birbirine bağlayıp zincire gönderdik, zincir reddetti. ` +
+          `Sebep — ${sebep} ` +
+          `Sonuç: 3 taşınmadan ${r.transfersThatHappened} tanesi oldu, yani hiçbiri. ` +
+          `Kimse yarı yolda kalmadı ve kimse istemediği bir şehre gönderilemedi.`
       );
     } catch {
       setRevertProofMessage("Zincire ulaşılamadı, tekrar deneyin.");
@@ -349,28 +364,37 @@ export default function TurkeyMap({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => handleFindCycle(0)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#836EF9] hover:bg-[#745ce8] text-white shadow-lg shadow-[#836EF9]/20 transition-all duration-200 active:scale-95 cursor-pointer flex items-center gap-2"
-            >
-              <span>⚡ Halkayı Bul</span>
-              <span className="bg-black/25 px-1.5 py-0.5 rounded-md text-[11px] font-mono">
-                {cycles[0]?.items.length || 11} Şehir
+            {/* Halka seçici: bulunan her halka kendi numarasıyla listelenir.
+                Önceden "Halkayı Bul" ve "2. Halka" diye iki ayrı düğme vardı
+                ve ikisinin ilişkisi belirsizdi. */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-zinc-500 mr-0.5">
+                Bulunan halkalar:
               </span>
-            </button>
-
-            {cycles.length > 1 && (
-              <button
-                onClick={() => handleFindCycle(1)}
-                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all duration-200 cursor-pointer ${
-                  activeCycleIndex === 1 && litEdgeCount > 0
-                    ? "bg-[#836EF9]/15 border-[#836EF9]/60 text-purple-200"
-                    : "bg-white/[0.03] border-white/[0.08] text-zinc-300 hover:bg-white/[0.06]"
-                }`}
-              >
-                2. Halka ({cycles[1].items.length} Şehir)
-              </button>
-            )}
+              {cycles.length === 0 && (
+                <span className="text-[11px] text-zinc-600">
+                  henüz kapanan bir halka yok
+                </span>
+              )}
+              {cycles.map((c, i) => {
+                const isActive = activeCycleIndex === i;
+                return (
+                  <button
+                    key={`cycle-${i}-${c.items[0]}`}
+                    onClick={() => handleFindCycle(i)}
+                    title={`Halka #${i + 1}: ${c.items.length} kadro — ${c.items.join(" → ")}`}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 cursor-pointer flex items-center gap-1.5 border ${
+                      isActive
+                        ? "bg-[#836EF9] border-[#836EF9] text-white shadow-lg shadow-[#836EF9]/20"
+                        : "bg-white/[0.03] border-white/[0.08] text-zinc-300 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    <span className="font-mono opacity-70">#{i + 1}</span>
+                    <span>{c.items.length} kadro</span>
+                  </button>
+                );
+              })}
+            </div>
 
             <button
               onClick={handleExecute}

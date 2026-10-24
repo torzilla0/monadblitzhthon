@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import TurkeyMap from "../components/TurkeyMap";
+import TurkeyMap, { TEACHER_NAMES } from "../components/TurkeyMap";
 import SalonGraph from "../components/SalonGraph";
 import PreferencePanel from "../components/PreferencePanel";
+import TeacherTable from "../components/TeacherTable";
 import { AuroraBackground, ShinyText } from "../components/ui/ReactBits";
 import {
   type Item,
@@ -363,23 +364,30 @@ export default function HomePage() {
         <section className="rounded-2xl bg-[#0c0c14]/75 backdrop-blur-xl border border-white/[0.07] px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1 max-w-2xl">
             <h1 className="text-sm sm:text-base font-semibold text-white">
-              Hakkari → Ankara → İzmir → Hakkari:{" "}
-              <span className="text-zinc-300 font-normal">
-                Mevzuat iki kişilik olduğu için 3+ kişilik becayiş halkaları
-                kurulamıyor.
-              </span>
+              Tayin isteyen öğretmenler birbirini bulamıyor.
             </h1>
-            <p className="text-xs text-zinc-400">
-              Halka, kapanan döngüleri bulur ve herkesi{" "}
-              <span className="text-purple-300 font-medium">
-                tek atomik işlemde
-              </span>{" "}
-              aynı anda taşır — ya herkes geçer ya hiçbiri.
+            <p className="text-xs text-zinc-300 leading-relaxed">
+              Hakkari&apos;deki Ankara&apos;ya gitmek istiyor, ama Ankara&apos;da
+              Hakkari&apos;ye gitmek isteyen yok. Ankara&apos;daki
+              İzmir&apos;e, İzmir&apos;deki Hakkari&apos;ye gitmek istiyor
+              olabilir &mdash; yani üçü birlikte çözülüyor. Bugün çözülemiyor,
+              çünkü yer değiştirme{" "}
+              <span className="text-amber-300 font-medium">iki kişilik</span>:
+              üç kişilik bir sırada &ldquo;kim önce istifa edecek?&rdquo;
+              sorusunun cevabı yok.
             </p>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              <span className="text-purple-300 font-medium">Halka</span> böyle
+              kapanan sıraları buluyor ve herkesi aynı anda taşıyor:{" "}
+              <span className="text-white font-medium">
+                ya hepsi taşınır, ya hiçbiri
+              </span>
+              . Kimse yarı yolda kalmıyor.
+            </p>
+            <p className="text-xs text-zinc-500 leading-relaxed">
               Aynı sıkışma hemşire nöbetinde, yurt odasında, ikinci el takasında
-              da var. Binlerce kişi ve kişi başına onlarca tercih olduğunda
-              eşleşmeler elle bulunamıyor — halka araması tam orada işe yarıyor.
+              da var. Binlerce kişi ve kişi başına onlarca tercih olunca bu
+              sıralar elle bulunamıyor &mdash; sistem tam orada işe yarıyor.
             </p>
           </div>
 
@@ -432,6 +440,16 @@ export default function HomePage() {
             />
           )}
         </div>
+
+        {/* KAYITLI ÖĞRETMENLER — haritanın girdisi. Yönetici olarak biz
+            giriyoruz; halkaların nereden çıktığı burada görünüyor. */}
+        <TeacherTable
+          items={becayisItems}
+          wants={becayisWants}
+          teacherNames={TEACHER_NAMES}
+          activeCycleItems={becayisCycles[0]?.items ?? []}
+          onSelectItem={(id) => setSelectedItemId(id)}
+        />
 
         {/* TERCİH SIRALAMA PANELİ */}
         <PreferencePanel
