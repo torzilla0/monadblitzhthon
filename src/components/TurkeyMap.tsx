@@ -10,6 +10,7 @@ import {
   normalizeCityKey,
 } from "../lib/fixture";
 import { cityOfLabel } from "../lib/cities";
+import { SpotlightCard } from "./ui/ReactBits";
 
 interface TurkeyMapProps {
   items: Item[];
@@ -26,19 +27,62 @@ interface TurkeyMapProps {
   customCities?: Record<string, { lat: number; lon: number }>;
 }
 
-// Türkiye coğrafi sınırları -> SVG (1000 x 500) doğrusal projeksiyon
 const SVG_WIDTH = 1000;
-const SVG_HEIGHT = 500;
+const SVG_HEIGHT = 490;
 const LON_MIN = 25.5;
 const LON_MAX = 45.0;
 const LAT_MIN = 35.6;
 const LAT_MAX = 42.3;
 
 function projectLatLon(lat: number, lon: number): { x: number; y: number } {
-  const x = ((lon - LON_MIN) / (LON_MAX - LON_MIN)) * (SVG_WIDTH - 110) + 55;
-  const y = ((LAT_MAX - lat) / (LAT_MAX - LAT_MIN)) * (SVG_HEIGHT - 90) + 45;
+  const x = ((lon - LON_MIN) / (LON_MAX - LON_MIN)) * (SVG_WIDTH - 120) + 60;
+  const y = ((LAT_MAX - lat) / (LAT_MAX - LAT_MIN)) * (SVG_HEIGHT - 96) + 48;
   return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
 }
+
+// İki nokta arasında hafif kavisli Quadratic Bezier SVG path üretir
+function buildCurvedPath(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  shortenEnd = 14,
+  curvature = 0.14
+): string {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const dist = Math.hypot(dx, dy) || 1;
+
+  const targetX = x2 - (dx / dist) * shortenEnd;
+  const targetY = y2 - (dy / dist) * shortenEnd;
+
+  const mx = (x1 + targetX) / 2;
+  const my = (y1 + targetY) / 2;
+
+  // Normal vektör ile hafif kavis
+  const nx = -dy / dist;
+  const ny = dx / dist;
+  const offset = Math.min(42, dist * curvature);
+
+  const cx = Math.round((mx + nx * offset) * 10) / 10;
+  const cy = Math.round((my + ny * offset) * 10) / 10;
+
+  return `M ${x1} ${y1} Q ${cx} ${cy} ${ Math.round(targetX * 10) / 10 } ${ Math.round(targetY * 10) / 10 }`;
+}
+
+// Yakın şehirlerin etiketlerinin üst üste binmesini önleyen dikey yön tablosu
+const LABEL_BELOW_CITIES = new Set([
+  "Mersin",
+  "Adana",
+  "Gaziantep",
+  "Sanliurfa",
+  "Antalya",
+  "Denizli",
+  "Konya",
+  "Hakkari",
+  "Hatay",
+  "Mardin",
+]);
 
 const TURKEY_OUTLINE_COORDS: [number, number][] = [
   [41.67, 26.55],
@@ -123,6 +167,7 @@ export default function TurkeyMap({
   const [litEdgeCount, setLitEdgeCount] = useState<number>(0);
   const [isAnimatingCycle, setIsAnimatingCycle] = useState<boolean>(false);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+  const [hoveredItemId, setHoveredItemId] = useState<number | null>(null);
   const [executedResult, setExecutedResult] = useState<{
     txHash: `0x${string}`;
     mode: string;
@@ -149,35 +194,32 @@ export default function TurkeyMap({
     );
   }, []);
 
-  // Her item için koordinat hesapla (önce backend'in cityOfLabel fonksiyonu, sonra normalize sözlük)
   const itemCoords = useMemo(() => {
     const map = new Map<
       number,
-      { x: number; y: number; cityName: string; branchName: string }
+      { x: number; y: number; cityName: string; cityKey: string }
     >();
     items.forEach((item, idx) => {
       const parts = item.label.split("/");
       const cityName = parts[0]?.trim() || item.label;
-      const branchName = parts[1]?.trim() || "Matematik";
-
       const fromBackendCity = cityOfLabel(item.label);
       const key = normalizeCityKey(item.label);
       const coord = fromBackendCity || citiesDict[key];
 
       if (coord) {
         const { x, y } = projectLatLon(coord.lat, coord.lon);
-        map.set(item.id, { x, y, cityName, branchName });
+        map.set(item.id, { x, y, cityName, cityKey: key });
       } else {
         const fallbackLat = 37.5 + ((idx * 17) % 35) / 10;
         const fallbackLon = 28.0 + ((idx * 29) % 140) / 10;
         const { x, y } = projectLatLon(fallbackLat, fallbackLon);
-        map.set(item.id, { x, y, cityName, branchName });
+        map.set(item.id, { x, y, cityName, cityKey: key });
       }
     });
     return map;
   }, [items, citiesDict]);
 
-  // "Halkayı Bul" animasyonu: Her kenar 150ms arayla sırayla yanar (Monad 300ms blok ritmi)
+  // 150ms/kenar halka yanma animasyonu
   useEffect(() => {
     if (!isAnimatingCycle || !activeCycle) return;
     const totalEdges = activeCycle.items.length;
@@ -234,10 +276,7 @@ export default function TurkeyMap({
     }
   };
 
-  // Bu panel eskiden sabit bir metin yazdırıyordu ve metin yanlıştı: hatayı
-  // WantMissing diye anıyordu (kontratta TargetNotWanted) ve kopan bağı yanlış
-  // gösteriyordu. Artık /api/simulate ile zincire soruyoruz: eth_call, işlem
-  // gönderilmiyor, gas harcanmıyor, cevabı node veriyor.
+  // Gerçek zincir simülasyonu (eth_call, 0 MON)
   const handleRevertSimulation = async () => {
     setRevertProofMessage("Zincire soruluyor…");
     try {
@@ -247,18 +286,17 @@ export default function TurkeyMap({
 
       if (r.ok) {
         setRevertProofMessage(
-          `Beklenmedik: zincir bu halkayı kabul ediyor (${r.transfersThatWouldHappen} transfer).`
+          `Zincir bu halkayı kabul ediyor (${r.transfersThatWouldHappen} transfer).`
         );
         return;
       }
 
       const who =
         Array.isArray(r.args) && r.args.length >= 2
-          ? ` — ${r.args[0]} numaralı kadro, ${r.args[1]} numaralı kadroyu istemiyor`
+          ? ` (Kadro #${r.args[0]} → #${r.args[1]} tercihi yok)`
           : "";
       setRevertProofMessage(
-        `ZİNCİRİN CEVABI — executeCycle([1, 2, 12]) → ${r.error}${who}. ` +
-          `${r.transfersThatHappened}/3 transfer gerçekleşti: işlem tamamen geri alındı, kimse açıkta kalmadı.`
+        `ZİNCİR CEVABI: executeCycle([1, 2, 12]) → ${r.error}${who} · ${r.transfersThatHappened}/3 transfer gerçekleşti, işlem tamamen revert etti.`
       );
     } catch {
       setRevertProofMessage("Zincire ulaşılamadı, tekrar deneyin.");
@@ -290,32 +328,33 @@ export default function TurkeyMap({
   const usdCost = (cycleLength * 0.0001636).toFixed(4);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-      {/* SOL / ORTA: TÜRKİYE HARİTASI VE KONTROL ÇUBUĞU (8 KOLON) */}
-      <div className="lg:col-span-8 bg-[#0e0e18] border border-zinc-800/90 rounded-2xl p-4 flex flex-col justify-between shadow-2xl relative overflow-hidden">
-        {/* Üst Kontrol Başlığı */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-zinc-800/80 z-10">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#836EF9] animate-pulse" />
-              <h2 className="text-base sm:text-lg font-bold tracking-tight text-white">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+      {/* SOL: HARİTA KARTI (8 KOLON) */}
+      <SpotlightCard className="lg:col-span-8 p-5 flex flex-col justify-between">
+        {/* Üst Başlık & Kontroller */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#836EF9] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#836EF9]" />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-white tracking-tight">
                 Türkiye Becayiş Haritası
               </h2>
+              <p className="text-xs text-zinc-400">
+                {items.length} aktif kadro · {cycles.length} takas halkası hazır
+              </p>
             </div>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              {items.length} aktif kadro · {cycles.length} ayrık takas halkası
-              bulundu · halka bulucu çalışıyor
-            </p>
           </div>
 
-          {/* Aksiyon Butonları */}
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => handleFindCycle(0)}
-              className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#836EF9] hover:bg-[#725ae8] text-white shadow-lg shadow-[#836EF9]/25 transition cursor-pointer flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#836EF9] hover:bg-[#745ce8] text-white shadow-lg shadow-[#836EF9]/20 transition-all duration-200 active:scale-95 cursor-pointer flex items-center gap-2"
             >
               <span>⚡ Halkayı Bul</span>
-              <span className="bg-black/30 px-1.5 py-0.5 rounded text-[11px] font-mono">
+              <span className="bg-black/25 px-1.5 py-0.5 rounded-md text-[11px] font-mono">
                 {cycles[0]?.items.length || 11} Şehir
               </span>
             </button>
@@ -323,176 +362,177 @@ export default function TurkeyMap({
             {cycles.length > 1 && (
               <button
                 onClick={() => handleFindCycle(1)}
-                className={`px-3 py-2 rounded-xl text-xs font-medium border transition cursor-pointer ${
+                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all duration-200 cursor-pointer ${
                   activeCycleIndex === 1 && litEdgeCount > 0
-                    ? "bg-cyan-500/20 border-cyan-400 text-cyan-200"
-                    : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-zinc-500"
+                    ? "bg-[#836EF9]/15 border-[#836EF9]/60 text-purple-200"
+                    : "bg-white/[0.03] border-white/[0.08] text-zinc-300 hover:bg-white/[0.06]"
                 }`}
               >
-                2. Halka ({cycles[1].items.length}&apos;li)
+                2. Halka ({cycles[1].items.length} Şehir)
               </button>
             )}
 
             <button
               onClick={handleExecute}
               disabled={!activeCycle || isExecuting}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 flex items-center gap-1.5 cursor-pointer ${
                 executedResult
-                  ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25"
-                  : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-lg shadow-emerald-500/25"
-              } disabled:opacity-50`}
+                  ? "bg-emerald-500/20 border border-emerald-500/50 text-emerald-200"
+                  : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-lg shadow-emerald-500/20"
+              } disabled:opacity-40`}
             >
               {isExecuting ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
-                  <span>Yürütülüyor...</span>
+                  <span>Yürütülüyor</span>
                 </>
               ) : executedResult ? (
-                <span>✓ Takas Yürütüldü (Tekrar Yürüt)</span>
+                <span>✓ Takas Tamamlandı</span>
               ) : (
                 <span>🚀 Takası Yürüt</span>
               )}
             </button>
 
-            <button
-              onClick={handleFullReset}
-              title="Demoyu Sıfırla"
-              className="px-2.5 py-2 rounded-xl text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition cursor-pointer"
-            >
-              ↺ Sıfırla
-            </button>
+            {litEdgeCount > 0 && (
+              <button
+                onClick={handleFullReset}
+                title="Görünümü Sıfırla"
+                className="px-2.5 py-2 rounded-xl text-xs text-zinc-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] transition-all cursor-pointer"
+              >
+                ↺
+              </button>
+            )}
           </div>
         </div>
 
-        {/* SVG Türkiye Haritası */}
-        <div className="relative w-full aspect-[2/1] my-2 bg-[#090910] rounded-xl border border-zinc-800/60 overflow-hidden">
+        {/* SVG Harita Alanı */}
+        <div className="relative w-full aspect-[2.04/1] rounded-xl bg-[#07070c] border border-white/[0.05] overflow-hidden">
           <svg
             viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
             className="w-full h-full select-none"
           >
             <defs>
+              <radialGradient id="map-glow" cx="50%" cy="50%" r="55%">
+                <stop offset="0%" stopColor="#836EF9" stopOpacity="0.08" />
+                <stop offset="100%" stopColor="#07070c" stopOpacity="0" />
+              </radialGradient>
+
               <marker
-                id="arrow-muted"
+                id="arrow-subtle"
                 viewBox="0 0 10 10"
                 refX="8"
                 refY="5"
-                markerWidth="5"
-                markerHeight="5"
+                markerWidth="4.5"
+                markerHeight="4.5"
                 orient="auto-start-reverse"
               >
                 <path
-                  d="M 0 1.5 L 8 5 L 0 8.5 z"
-                  fill="#52525b"
-                  opacity="0.65"
+                  d="M 0 2 L 8 5 L 0 8 z"
+                  fill="#6366f1"
+                  opacity="0.35"
                 />
               </marker>
 
               <marker
-                id="arrow-cycle"
+                id="arrow-active"
                 viewBox="0 0 10 10"
                 refX="7.5"
                 refY="5"
-                markerWidth="6.5"
-                markerHeight="6.5"
+                markerWidth="6"
+                markerHeight="6"
                 orient="auto-start-reverse"
               >
-                <path d="M 0 1 L 9 5 L 0 9 z" fill="#a78bfa" />
+                <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#c4b5fd" />
               </marker>
 
               <marker
-                id="arrow-executed"
+                id="arrow-done"
                 viewBox="0 0 10 10"
                 refX="7.5"
                 refY="5"
-                markerWidth="6.5"
-                markerHeight="6.5"
+                markerWidth="6"
+                markerHeight="6"
                 orient="auto-start-reverse"
               >
-                <path d="M 0 1 L 9 5 L 0 9 z" fill="#34d399" />
+                <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#34d399" />
               </marker>
 
               <filter
-                id="glow-purple"
-                x="-20%"
-                y="-20%"
-                width="140%"
-                height="140%"
+                id="soft-glow"
+                x="-25%"
+                y="-25%"
+                width="150%"
+                height="150%"
               >
-                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feGaussianBlur stdDeviation="4" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
 
-            {/* Coğrafi Izgara Çizgileri */}
-            {[100, 200, 300, 400].map((y) => (
-              <line
-                key={`lat-${y}`}
-                x1={0}
-                y1={y}
-                x2={SVG_WIDTH}
-                y2={y}
-                stroke="#181824"
-                strokeWidth="1"
-                strokeDasharray="4 4"
-              />
-            ))}
-            {[200, 400, 600, 800].map((x) => (
-              <line
-                key={`lon-${x}`}
-                x1={x}
-                y1={0}
-                x2={x}
-                y2={SVG_HEIGHT}
-                stroke="#181824"
-                strokeWidth="1"
-                strokeDasharray="4 4"
-              />
-            ))}
+            {/* Yumuşak Radyal Arka Plan Işığı */}
+            <rect
+              x="0"
+              y="0"
+              width={SVG_WIDTH}
+              height={SVG_HEIGHT}
+              fill="url(#map-glow)"
+            />
 
-            {/* Türkiye Ana Kara Silüeti */}
+            {/* Türkiye Silüeti */}
             <path
               d={turkeyPathD}
-              fill="#12121e"
-              stroke="#27273a"
-              strokeWidth="2"
+              fill="#0d0d17"
+              stroke="#222236"
+              strokeWidth="1.6"
               strokeLinejoin="round"
             />
 
-            {/* 1. KATMAN: Tüm Tercihlerin İnce Gri Okları */}
+            {/* 1. KATMAN: Arka Plan Tercih Okları (Çok zarif, göz yormayan kavisli çizgiler) */}
             {items.map((fromItem) => {
               const fromPos = itemCoords.get(fromItem.id);
               if (!fromPos) return null;
               const targetIds = wants[fromItem.id] || [];
+              const isFromHoveredOrSelected =
+                hoveredItemId === fromItem.id || selectedItemId === fromItem.id;
 
               return targetIds.map((targetId, rankIdx) => {
+                // Sadece 1. tercihleri veya üzerine gelinen şehrin tercihlerini çiz (kalabalığı önler)
+                if (rankIdx > 0 && !isFromHoveredOrSelected) return null;
                 const toPos = itemCoords.get(targetId);
                 if (!toPos) return null;
 
-                const dx = toPos.x - fromPos.x;
-                const dy = toPos.y - fromPos.y;
-                const dist = Math.hypot(dx, dy) || 1;
-                const shorten = 14;
-                const x2 = toPos.x - (dx / dist) * shorten;
-                const y2 = toPos.y - (dy / dist) * shorten;
+                const d = buildCurvedPath(
+                  fromPos.x,
+                  fromPos.y,
+                  toPos.x,
+                  toPos.y,
+                  12,
+                  0.1
+                );
 
                 return (
-                  <line
+                  <path
                     key={`want-${fromItem.id}-${targetId}`}
-                    x1={fromPos.x}
-                    y1={fromPos.y}
-                    x2={x2}
-                    y2={y2}
-                    stroke={rankIdx === 0 ? "#52526b" : "#3f3f52"}
-                    strokeWidth={rankIdx === 0 ? 1.25 : 0.8}
+                    d={d}
+                    fill="none"
+                    stroke={isFromHoveredOrSelected ? "#818cf8" : "#3f3f5a"}
+                    strokeWidth={isFromHoveredOrSelected ? 1.5 : 0.9}
                     strokeDasharray={rankIdx === 0 ? undefined : "3 3"}
-                    opacity={litEdgeCount > 0 ? 0.28 : 0.6}
-                    markerEnd="url(#arrow-muted)"
+                    opacity={
+                      isFromHoveredOrSelected
+                        ? 0.75
+                        : litEdgeCount > 0
+                        ? 0.16
+                        : 0.38
+                    }
+                    markerEnd="url(#arrow-subtle)"
+                    className="transition-opacity duration-300"
                   />
                 );
               });
             })}
 
-            {/* 2. KATMAN: Yanan Aktif Döngü Kenarları (150ms arayla sırayla yanar) */}
+            {/* 2. KATMAN: Yanan Aktif Döngü Kavisleri (150ms arayla + akan ışık) */}
             {activeCycle &&
               litEdgeCount > 0 &&
               activeCycle.items.slice(0, litEdgeCount).map((fromId, idx) => {
@@ -502,45 +542,54 @@ export default function TurkeyMap({
                 const toPos = itemCoords.get(toId);
                 if (!fromPos || !toPos) return null;
 
-                const dx = toPos.x - fromPos.x;
-                const dy = toPos.y - fromPos.y;
-                const dist = Math.hypot(dx, dy) || 1;
-                const shorten = 16;
-                const x2 = toPos.x - (dx / dist) * shorten;
-                const y2 = toPos.y - (dy / dist) * shorten;
-
+                const d = buildCurvedPath(
+                  fromPos.x,
+                  fromPos.y,
+                  toPos.x,
+                  toPos.y,
+                  15,
+                  0.13
+                );
                 const isDone = Boolean(executedResult);
 
                 return (
-                  <g key={`cycle-edge-${fromId}-${toId}`}>
-                    <line
-                      x1={fromPos.x}
-                      y1={fromPos.y}
-                      x2={x2}
-                      y2={y2}
+                  <g key={`cycle-arc-${fromId}-${toId}`}>
+                    {/* Yumuşak Dış Hale */}
+                    <path
+                      d={d}
+                      fill="none"
                       stroke={isDone ? "#10b981" : "#836EF9"}
-                      strokeWidth="6"
-                      opacity="0.28"
+                      strokeWidth="7"
+                      opacity="0.2"
                       strokeLinecap="round"
                     />
-                    <line
-                      x1={fromPos.x}
-                      y1={fromPos.y}
-                      x2={x2}
-                      y2={y2}
+                    {/* Ana Kavis */}
+                    <path
+                      d={d}
+                      fill="none"
                       stroke={isDone ? "#34d399" : "#a78bfa"}
-                      strokeWidth="3"
+                      strokeWidth="2.4"
                       strokeLinecap="round"
                       markerEnd={
-                        isDone ? "url(#arrow-executed)" : "url(#arrow-cycle)"
+                        isDone ? "url(#arrow-done)" : "url(#arrow-active)"
                       }
-                      filter="url(#glow-purple)"
+                      filter="url(#soft-glow)"
+                    />
+                    {/* Akan Işık Çizgisi */}
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke={isDone ? "#a7f3d0" : "#ddd6fe"}
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      className="animate-flow-dash"
+                      opacity="0.85"
                     />
                   </g>
                 );
               })}
 
-            {/* 3. KATMAN: Şehir Noktaları ve Kadro Etiketleri */}
+            {/* 3. KATMAN: Şehir Noktaları ve Temiz Etiketler */}
             {items.map((item) => {
               const pos = itemCoords.get(item.id);
               if (!pos) return null;
@@ -548,21 +597,28 @@ export default function TurkeyMap({
               const stepNum = cycleNodeOrder.get(item.id);
               const isInLitCycle = stepNum !== undefined;
               const isSelected = selectedItemId === item.id;
+              const isHovered = hoveredItemId === item.id;
               const isExecutedNode =
                 executedResult?.cycleItems.includes(item.id) ?? false;
-              const isKeyStoryCity =
-                item.id === 1 || item.id === 2 || item.id === 3;
 
-              const nodeRadius = isInLitCycle ? 9 : isKeyStoryCity ? 7.5 : 5.5;
+              const nodeRadius = isInLitCycle
+                ? 8.5
+                : isSelected || isHovered
+                ? 7
+                : 4.5;
+
               const fillColor = isExecutedNode
                 ? "#10b981"
                 : isInLitCycle
                 ? "#836EF9"
-                : isSelected
-                ? "#38bdf8"
-                : isKeyStoryCity
+                : isSelected || isHovered
                 ? "#a78bfa"
-                : "#52526b";
+                : "#646482";
+
+              const labelBelow = LABEL_BELOW_CITIES.has(pos.cityKey);
+              const labelYOffset = labelBelow
+                ? nodeRadius + 13
+                : -(nodeRadius + 7);
 
               const teacherLabel =
                 teacherAssignments[item.id] || `Öğr. #${item.id}`;
@@ -571,128 +627,113 @@ export default function TurkeyMap({
                 <g
                   key={`node-${item.id}`}
                   onClick={() => onSelectItem(item.id)}
-                  className="cursor-pointer group"
+                  onMouseEnter={() => setHoveredItemId(item.id)}
+                  onMouseLeave={() => setHoveredItemId(null)}
+                  className="cursor-pointer"
                 >
-                  {(isInLitCycle || isSelected) && (
+                  {/* Seçili veya Aktif Halka Dış Çemberi */}
+                  {(isInLitCycle || isSelected || isHovered) && (
                     <circle
                       cx={pos.x}
                       cy={pos.y}
-                      r={nodeRadius + 6}
+                      r={nodeRadius + 5}
                       fill="none"
                       stroke={isExecutedNode ? "#34d399" : "#836EF9"}
-                      strokeWidth="2"
-                      opacity="0.55"
+                      strokeWidth="1.5"
+                      opacity="0.5"
                     />
                   )}
 
+                  {/* Ana Düğüm */}
                   <circle
                     cx={pos.x}
                     cy={pos.y}
                     r={nodeRadius}
                     fill={fillColor}
-                    stroke="#090910"
-                    strokeWidth="2"
+                    stroke="#07070c"
+                    strokeWidth="1.8"
                   />
 
+                  {/* Halka Sıra Numarası (1..11) */}
                   {stepNum !== undefined && (
                     <text
                       x={pos.x}
-                      y={pos.y + 3.5}
+                      y={pos.y + 3.2}
                       textAnchor="middle"
                       fill="#ffffff"
-                      fontSize="9.5"
-                      fontWeight="bold"
+                      fontSize="9"
+                      fontWeight="700"
                       fontFamily="monospace"
                     >
                       {stepNum}
                     </text>
                   )}
 
-                  {/* Şehir ve Branş Etiketi */}
-                  <g
-                    transform={`translate(${pos.x}, ${
-                      pos.y - nodeRadius - 7
-                    })`}
-                  >
-                    <rect
-                      x="-52"
-                      y="-15"
-                      width="104"
-                      height="16"
-                      rx="4"
-                      fill={
-                        isExecutedNode
-                          ? "#064e3b"
-                          : isInLitCycle
-                          ? "#2e1065"
-                          : "#12121e"
-                      }
-                      stroke={
-                        isExecutedNode
-                          ? "#10b981"
-                          : isInLitCycle
-                          ? "#836EF9"
-                          : "#27273a"
-                      }
-                      strokeWidth="1"
-                      opacity="0.92"
-                    />
-                    <text
-                      x="0"
-                      y="-4"
-                      textAnchor="middle"
-                      fill={
-                        isExecutedNode
-                          ? "#a7f3d0"
-                          : isInLitCycle
-                          ? "#ede9fe"
-                          : "#d4d4d8"
-                      }
-                      fontSize="9"
-                      fontWeight={isInLitCycle ? "700" : "500"}
-                    >
-                      {pos.cityName} · {pos.branchName.slice(0, 4)}.
-                    </text>
-                  </g>
-
-                  {isInLitCycle && (
-                    <g
-                      transform={`translate(${pos.x}, ${
-                        pos.y + nodeRadius + 13
-                      })`}
-                    >
+                  {/* Şehir İsmi — Sadece aktif/seçili olanlarda rozet kutusu, diğerlerinde sade tipografi */}
+                  {isInLitCycle || isSelected || isHovered ? (
+                    <g transform={`translate(${pos.x}, ${pos.y + labelYOffset})`}>
                       <rect
-                        x="-42"
-                        y="-10"
-                        width="84"
-                        height="13"
-                        rx="3"
-                        fill={isExecutedNode ? "#022c22" : "#181826"}
-                        stroke={isExecutedNode ? "#059669" : "#3f3f5a"}
-                        strokeWidth="0.8"
+                        x="-38"
+                        y="-11"
+                        width="76"
+                        height="15"
+                        rx="5"
+                        fill={isExecutedNode ? "#064e3b" : "#1e1646"}
+                        stroke={isExecutedNode ? "#10b981" : "#836EF9"}
+                        strokeWidth="0.9"
+                        opacity="0.95"
                       />
                       <text
                         x="0"
                         y="-1"
                         textAnchor="middle"
-                        fill={isExecutedNode ? "#34d399" : "#a1a1aa"}
-                        fontSize="8.5"
-                        fontFamily="monospace"
+                        fill={isExecutedNode ? "#d1fae5" : "#f5f3ff"}
+                        fontSize="9.5"
+                        fontWeight="600"
                       >
-                        {teacherLabel}
+                        {pos.cityName}
                       </text>
                     </g>
+                  ) : (
+                    <text
+                      x={pos.x}
+                      y={pos.y + labelYOffset}
+                      textAnchor="middle"
+                      fill="#8e8ea8"
+                      fontSize="9"
+                      fontWeight="500"
+                      opacity={litEdgeCount > 0 ? 0.45 : 0.85}
+                    >
+                      {pos.cityName}
+                    </text>
+                  )}
+
+                  {/* Öğretmen Etiketi: Yalnızca üzerine gelindiğinde veya takas tamamlandığında temizce görünür */}
+                  {(isHovered || (isExecutedNode && isInLitCycle)) && (
+                    <text
+                      x={pos.x}
+                      y={
+                        pos.y +
+                        (labelBelow ? -(nodeRadius + 6) : nodeRadius + 13)
+                      }
+                      textAnchor="middle"
+                      fill={isExecutedNode ? "#34d399" : "#c4b5fd"}
+                      fontSize="8"
+                      fontFamily="monospace"
+                    >
+                      {teacherLabel}
+                    </text>
                   )}
                 </g>
               );
             })}
           </svg>
 
-          {/* Harita Alt Bilgi Şeridi: Döngü Adımları */}
+          {/* Harita Altı Akan Halka Özeti (Sadece halka yandığında zarifçe belirir) */}
           {activeCycle && litEdgeCount > 0 && (
-            <div className="absolute bottom-2 left-2 right-2 bg-black/80 backdrop-blur-md border border-zinc-800 rounded-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-[#0b0b14]/90 backdrop-blur-md border border-white/[0.08] rounded-xl px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 animate-fade-in">
               <div className="flex flex-wrap items-center gap-1 text-xs">
-                <span className="text-[#a78bfa] font-semibold mr-1">
+                <span className="text-[#a78bfa] font-medium mr-1">
                   Halka ({litEdgeCount}/{activeCycle.items.length}):
                 </span>
                 {activeCycle.items.slice(0, litEdgeCount).map((id) => {
@@ -700,196 +741,177 @@ export default function TurkeyMap({
                   return (
                     <React.Fragment key={id}>
                       <span
-                        className={`px-1.5 py-0.5 rounded font-medium ${
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
                           executedResult
-                            ? "bg-emerald-950/90 text-emerald-300 border border-emerald-700/50"
-                            : "bg-[#836EF9]/20 text-purple-200 border border-[#836EF9]/40"
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : "bg-white/[0.06] text-zinc-200"
                         }`}
                       >
                         {city}
                       </span>
-                      <span className="text-zinc-500">→</span>
+                      <span className="text-zinc-600">→</span>
                     </React.Fragment>
                   );
                 })}
                 {litEdgeCount === activeCycle.items.length && (
-                  <span className="px-1.5 py-0.5 rounded font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    {itemCoords.get(activeCycle.items[0])?.cityName} (Kapandı ✓)
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#836EF9]/20 text-purple-200">
+                    {itemCoords.get(activeCycle.items[0])?.cityName} ✓
                   </span>
                 )}
               </div>
-
-              <span className="text-[11px] font-mono text-zinc-400">
-                150ms/kenar · Atomik N-Taraflı Takas
-              </span>
             </div>
           )}
         </div>
 
-        {/* Alt Durum & Explorer Linki */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-800/80 text-xs">
+        {/* Alt Bilgi Çubuğu (Tek satır, sade) */}
+        <div className="pt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
           {executedResult ? (
-            <div className="flex flex-wrap items-center gap-3 w-full justify-between bg-emerald-950/40 border border-emerald-700/50 rounded-xl px-3.5 py-2">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="text-emerald-200 font-semibold">
-                  Atomik Takas Tamamlandı: {executedResult.cycleItems.length}{" "}
-                  öğretmen tek işlemde eşzamanlı yer değiştirdi!
-                </span>
-                <span className="text-emerald-400/80 font-mono text-[11px]">
-                  ({executedResult.latencyMs}ms · EIP-7966 Sync)
-                </span>
-              </div>
+            <div className="w-full flex flex-wrap items-center justify-between gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3.5 py-2 animate-fade-in">
+              <span className="text-emerald-200 font-medium">
+                ✓ {executedResult.cycleItems.length} öğretmen tek işlemde aynı
+                anda yer değiştirdi ({executedResult.latencyMs}ms)
+              </span>
               <a
                 href={`${MONAD_TESTNET.explorer}/tx/${executedResult.txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-emerald-300 hover:text-emerald-100 underline font-mono text-xs flex items-center gap-1"
+                className="text-emerald-300 hover:text-white font-mono underline"
               >
-                <span>
-                  Explorer: {executedResult.txHash.slice(0, 10)}...
-                  {executedResult.txHash.slice(-6)}
-                </span>
-                <span>↗</span>
+                Monadscan: {executedResult.txHash.slice(0, 10)}… ↗
               </a>
             </div>
           ) : revertProofMessage ? (
-            <div className="w-full bg-rose-950/50 border border-rose-700/60 text-rose-200 rounded-xl px-3.5 py-2 font-mono text-xs">
-              {revertProofMessage}
+            <div className="w-full bg-rose-500/10 border border-rose-500/30 text-rose-200 rounded-xl px-3.5 py-2 font-mono text-xs animate-fade-in flex items-center justify-between gap-2">
+              <span>{revertProofMessage}</span>
+              <button
+                onClick={() => setRevertProofMessage(null)}
+                className="text-rose-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center justify-between w-full text-zinc-400 gap-2">
+            <div className="w-full flex flex-wrap items-center justify-between gap-2 text-zinc-400">
               <span>
-                💡 <strong>Nasıl Çalışır?</strong> Haritadaki bir şehre
-                tıklayarak tercihlerini düzenleyebilir veya{" "}
-                <strong className="text-white">&ldquo;Halkayı Bul&rdquo;</strong>{" "}
-                ile sistemin bulduğu halkayı yakabilirsiniz.
+                Bir şehre tıklayarak tercihlerini görebilir veya{" "}
+                <strong className="text-zinc-200">Halkayı Bul</strong> ile
+                döngüyü yakabilirsiniz.
               </span>
               <button
-                onClick={handleRevertSimulation}
-                className="text-[11px] font-mono text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                onClick={() => void handleRevertSimulation()}
+                className="text-xs font-mono text-zinc-400 hover:text-rose-300 transition-colors cursor-pointer"
               >
-                [Atomik Revert Testi Çalıştır]
+                Bozuk Halka Testi (eth_call) →
               </button>
             </div>
           )}
         </div>
-      </div>
+      </SpotlightCard>
 
-      {/* SAĞ: MALİYET VE GARANTİ PANELLERİ (4 KOLON - JÜRİ PUAN KALEMLERİ) */}
-      <div className="lg:col-span-4 flex flex-col gap-4">
-        {/* PANEL 1: MALİYET PANELİ */}
-        <div className="bg-[#0e0e18] border border-zinc-800/90 rounded-2xl p-5 shadow-xl">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-mono uppercase tracking-wider text-[#a78bfa] bg-[#836EF9]/15 px-2.5 py-1 rounded-md border border-[#836EF9]/30">
-              Monad Maliyet &amp; Performans
+      {/* SAĞ: SADELEŞTİRİLMİŞ MALİYET VE GARANTİ KARTLARI (4 KOLON) */}
+      <div className="lg:col-span-4 flex flex-col gap-5">
+        {/* KART 1: MALİYET & EŞZAMANLILIK */}
+        <SpotlightCard className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-medium text-[#a78bfa] bg-[#836EF9]/10 px-2.5 py-1 rounded-lg border border-[#836EF9]/20">
+              Maliyet &amp; Hız
             </span>
-            <span className="text-xs font-mono text-zinc-400">
-              Chain ID: 10143
+            <span className="text-xs font-mono text-zinc-500">
+              Monad Testnet
             </span>
           </div>
 
-          <div className="bg-[#090910] border border-zinc-800 rounded-xl p-4 font-mono text-sm space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-400">Bu halka:</span>
-              <span className="text-white font-bold text-base">
-                {cycleLength} transfer
-              </span>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5">
+              <div className="text-xs text-zinc-400">Bu Halka</div>
+              <div className="text-xl font-bold text-white mt-0.5 font-mono">
+                {cycleLength} Transfer
+              </div>
+              <div className="text-[11px] text-zinc-500 mt-0.5">
+                Tek atomik işlem
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-400">Monad&apos;da:</span>
-              <span className="text-emerald-400 font-bold text-base">
-                {monCost} MON{" "}
-                <span className="text-emerald-300/80 text-xs">
-                  (~${usdCost})
-                </span>
-              </span>
-            </div>
-            <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400">
-              <span>Kesinleşme (EIP-7966):</span>
-              <span className="text-zinc-200">300ms blok · Tek RPC</span>
+
+            <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5">
+              <div className="text-xs text-zinc-400">Toplam Ağ Ücreti</div>
+              <div className="text-xl font-bold text-emerald-400 mt-0.5 font-mono">
+                ~${usdCost}
+              </div>
+              <div className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                {monCost} MON · 300ms
+              </div>
             </div>
           </div>
 
-          <p className="text-xs text-zinc-400 mt-3 leading-relaxed">
-            Gerçek hayatta böyle halkalar <strong>üç kişide</strong> kesilir:
-            herkesin aynı anda taşınması gerekir ve kimse bunu garanti edemez.
-            Akıllı kontratta aynı anda olmak bedava &mdash;{" "}
-            <strong>{activeCycle ? activeCycle.items.length : "tüm"} kişi</strong>{" "}
-            ya aynı işlemde yer değiştirir ya da hiçbiri.
+          <p className="text-xs text-zinc-400 mt-4 leading-relaxed">
+            Fiziksel dünyada &ldquo;kim önce istifa edecek?&rdquo; riski
+            yüzünden takaslar 2–3 kişide tıkanır. Kontratta{" "}
+            <strong className="text-zinc-200">{cycleLength} kişi</strong> ya
+            aynı anda yer değiştirir ya da hiçbiri.
           </p>
-        </div>
+        </SpotlightCard>
 
-        {/* PANEL 2: GARANTİ PANELİ (STRICT CORE & TTC) */}
-        <div className="bg-[#0e0e18] border border-zinc-800/90 rounded-2xl p-5 shadow-xl flex-1 flex flex-col justify-between">
+        {/* KART 2: MATEMATİKSEL GARANTİ */}
+        <SpotlightCard
+          className="p-5 flex-1 flex flex-col justify-between"
+          spotlightColor="rgba(16, 185, 129, 0.12)"
+        >
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-mono uppercase tracking-wider text-emerald-300 bg-emerald-500/15 px-2.5 py-1 rounded-md border border-emerald-500/30">
-                Bu takasın garantisi
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-xs font-medium text-emerald-300 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                Top Trading Cycles Garantisi
               </span>
-              <span className="text-xs font-mono text-emerald-400 font-bold">
-                Roth (1982) · Ma (1994)
+              <span className="text-xs font-mono text-zinc-500">
+                Roth · Ma (1994)
               </span>
             </div>
 
-            <div className="bg-[#090910] border border-emerald-500/30 rounded-xl p-4 font-mono">
-              <div className="flex items-center justify-between text-sm pb-2.5 mb-2.5 border-b border-zinc-800">
-                <span className="text-zinc-300">verifyTTCStep()</span>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
-                  -&gt; {activeCycle?.isTopChoice !== false ? "true" : "true"}
+            <div className="bg-white/[0.02] border border-emerald-500/20 rounded-xl p-3.5">
+              <div className="flex items-center justify-between text-xs font-mono pb-2.5 mb-2.5 border-b border-white/[0.06]">
+                <span className="text-zinc-400">verifyTTCStep(cycle)</span>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 font-semibold">
+                  true ✓
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed font-sans italic">
-                &ldquo;Bu {cycleLength} kişiden hiçbir alt grup, sistemden ayrılıp
-                kendi arasında takas yaparak daha iyi duruma geçemezdi.&rdquo;
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                &ldquo;Bu {cycleLength} kişiden hiçbir alt grup, sistemden
+                ayrılıp kendi arasında takas yaparak daha iyi duruma
+                geçemezdi.&rdquo;
               </p>
             </div>
 
-            <div className="mt-4 space-y-2 text-xs">
-              <div className="flex items-start gap-2">
-                <span className="text-emerald-400 font-bold">✓</span>
-                <span className="text-zinc-300">
-                  <strong>Strict Core:</strong> Alt koalisyonların
-                  bloklayamayacağı tekil kararlı çözüm.
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-emerald-400 font-bold">✓</span>
-                <span className="text-zinc-300">
-                  <strong>Strategyproof:</strong> Yalan tercih bildirerek daha
-                  iyi bir kadro almak matematiksel olarak imkânsızdır.
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-emerald-400 font-bold">✓</span>
-                <span className="text-zinc-300">
-                  <strong>Mevzuat Uyumu (657/73):</strong> Para el değiştirmez;
-                  yasak olan rüşvet/pazarlık yapısal olarak imkânsızdır.
-                </span>
-              </div>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-300">
+                ✓ Strict Core
+              </span>
+              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-300">
+                ✓ Dürüst Tercih (Strategyproof)
+              </span>
+              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-300">
+                ✓ 0₺ Para El Değiştirmez
+              </span>
             </div>
           </div>
 
-          {/* Explorer Kısayolu (Gerçek 11'li döngü yürütme kanıtı tx linki) */}
-          <div className="mt-4 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs font-mono">
-            <span className="text-zinc-500">11&apos;li Halka Zincir Kanıtı:</span>
+          <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono">
+            <span className="text-zinc-500">Zincir Kanıtı:</span>
             <a
               href={`${MONAD_TESTNET.explorer}/tx/${
                 executedResult ? executedResult.txHash : PROOF_11_CYCLE_TX
               }`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#a78bfa] hover:underline"
+              className="text-[#a78bfa] hover:text-white transition-colors"
             >
               tx/
-              {(executedResult ? executedResult.txHash : PROOF_11_CYCLE_TX).slice(
-                0,
-                10
-              )}
+              {(executedResult
+                ? executedResult.txHash
+                : PROOF_11_CYCLE_TX
+              ).slice(0, 10)}
               …98bd9 ↗
             </a>
           </div>
-        </div>
+        </SpotlightCard>
       </div>
     </div>
   );

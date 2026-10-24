@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { type Item, type Cycle, MONAD_TESTNET } from "../lib/fixture";
+import { SpotlightCard } from "./ui/ReactBits";
 
 interface SalonGraphProps {
   items: Item[];
@@ -18,13 +19,7 @@ interface SalonGraphProps {
   onSelectItem: (id: number) => void;
 }
 
-const CYCLE_COLORS = [
-  "#836EF9", // Monad Moru
-  "#10B981", // Zümrüt
-  "#06B6D4", // Camgöbeği
-  "#F59E0B", // Kehribar
-  "#EC4899", // Pembe
-];
+const CYCLE_COLORS = ["#836EF9", "#10B981", "#06B6D4", "#F59E0B", "#EC4899"];
 
 export default function SalonGraph({
   items,
@@ -44,10 +39,9 @@ export default function SalonGraph({
     length: number;
   } | null>(null);
 
-  // Dairesel graf yerleşimi (merkez 420, 250, yarıçap 185)
   const CX = 420;
-  const CY = 250;
-  const RADIUS = 185;
+  const CY = 240;
+  const RADIUS = 175;
 
   const nodePositions = useMemo(() => {
     const posMap = new Map<number, { x: number; y: number; angle: number }>();
@@ -61,7 +55,6 @@ export default function SalonGraph({
     return posMap;
   }, [items]);
 
-  // Hangi item hangi döngüde?
   const itemCycleMap = useMemo(() => {
     const m = new Map<number, number>();
     cycles.forEach((cyc, cIdx) => {
@@ -85,48 +78,36 @@ export default function SalonGraph({
     }
   };
 
-  // Salon sayaçları (gerçek veri + salon simülasyonu)
-  const participantCount = Math.max(47, items.length + 23);
-  const cycleCount = Math.max(9, cycles.length + 5);
-  const transferCount = Math.max(
-    112,
-    cycles.reduce((acc, c) => acc + c.items.length, 0) + 94
-  );
+  const totalTransfers = cycles.reduce((acc, c) => acc + c.items.length, 0);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-      {/* SOL: DAİRESEL SALON GRAFI (8 KOLON) */}
-      <div className="lg:col-span-8 bg-[#0e0e18] border border-zinc-800/90 rounded-2xl p-4 shadow-2xl flex flex-col justify-between">
-        {/* Üst Sayaç Çubuğu (FRONTEND.md gereksinimi: 47 kişi · 9 döngü · 112 transfer) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-zinc-800/80">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="font-mono text-sm sm:text-base font-bold text-white tracking-tight">
-                {participantCount} kişi · {cycleCount} döngü · {transferCount}{" "}
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+      <SpotlightCard className="lg:col-span-8 p-5 flex flex-col justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+          <div className="flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <div>
+              <h2 className="text-base font-semibold text-white">
+                Canlı Salon Takas Grafı
+              </h2>
+              <p className="text-xs text-zinc-400 font-mono">
+                {items.length} sticker · {cycles.length} döngü · {totalTransfers}{" "}
                 transfer
-              </span>
+              </p>
             </div>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Canlı Salon — sticker takası · Ayrık halkalar Monad&apos;da
-              paralel yürütülür
-            </p>
           </div>
 
           <button
             onClick={onClaimStickers}
             disabled={isClaiming}
-            className="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#836EF9] hover:bg-[#725ae8] text-white shadow-lg shadow-[#836EF9]/25 transition cursor-pointer disabled:opacity-50"
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#836EF9] hover:bg-[#745ce8] text-white shadow-lg shadow-[#836EF9]/20 transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50"
           >
-            {isClaiming
-              ? "Cüzdana Sticker Basılıyor..."
-              : "🎁 3 Rastgele Sticker Al (claimStickers)"}
+            {isClaiming ? "Sticker Alınıyor…" : "🎁 3 Rastgele Sticker Al"}
           </button>
         </div>
 
-        {/* SVG Dairesel Graf */}
-        <div className="relative w-full aspect-[16/10] my-2 bg-[#090910] rounded-xl border border-zinc-800/60 overflow-hidden">
-          <svg viewBox="0 0 840 500" className="w-full h-full select-none">
+        <div className="relative w-full aspect-[16/9.5] bg-[#07070c] rounded-xl border border-white/[0.05] overflow-hidden">
+          <svg viewBox="0 0 840 480" className="w-full h-full select-none">
             <defs>
               {CYCLE_COLORS.map((col, idx) => (
                 <marker
@@ -139,7 +120,7 @@ export default function SalonGraph({
                   markerHeight="6"
                   orient="auto-start-reverse"
                 >
-                  <path d="M 0 1 L 9 5 L 0 9 z" fill={col} />
+                  <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill={col} />
                 </marker>
               ))}
               <marker
@@ -155,18 +136,16 @@ export default function SalonGraph({
               </marker>
             </defs>
 
-            {/* Arka Plan Halka Çemberi */}
             <circle
               cx={CX}
               cy={CY}
               r={RADIUS}
               fill="none"
               stroke="#181826"
-              strokeWidth="1.5"
-              strokeDasharray="5 5"
+              strokeWidth="1.2"
+              strokeDasharray="4 6"
             />
 
-            {/* 1. Tüm Açık Tercih Okları */}
             {items.map((fromItem) => {
               const p1 = nodePositions.get(fromItem.id);
               if (!p1) return null;
@@ -183,14 +162,13 @@ export default function SalonGraph({
                     y2={p2.y}
                     stroke="#2d2d42"
                     strokeWidth="1"
-                    opacity="0.45"
+                    opacity="0.4"
                     markerEnd="url(#salon-arrow-muted)"
                   />
                 );
               });
             })}
 
-            {/* 2. Yanan Renkli Takas Döngüleri */}
             {cycles.map((cyc, cIdx) => {
               const color = CYCLE_COLORS[cIdx % CYCLE_COLORS.length];
               const isFocused = selectedCycleIdx === cIdx;
@@ -222,7 +200,7 @@ export default function SalonGraph({
                         y2={y2}
                         stroke={color}
                         strokeWidth="6"
-                        opacity="0.22"
+                        opacity="0.2"
                       />
                     )}
                     <line
@@ -231,8 +209,8 @@ export default function SalonGraph({
                       x2={x2}
                       y2={y2}
                       stroke={color}
-                      strokeWidth={isFocused ? 2.8 : 1.8}
-                      opacity={isFocused ? 1 : 0.7}
+                      strokeWidth={isFocused ? 2.5 : 1.6}
+                      opacity={isFocused ? 1 : 0.65}
                       markerEnd={`url(#salon-arrow-${cIdx % CYCLE_COLORS.length})`}
                     />
                   </g>
@@ -240,7 +218,6 @@ export default function SalonGraph({
               });
             })}
 
-            {/* 3. Düğümler */}
             {items.map((item) => {
               const pos = nodePositions.get(item.id);
               if (!pos) return null;
@@ -248,12 +225,11 @@ export default function SalonGraph({
               const color =
                 cIdx !== undefined
                   ? CYCLE_COLORS[cIdx % CYCLE_COLORS.length]
-                  : "#52526b";
+                  : "#646482";
               const isMine =
                 item.owner.toLowerCase() === myAddress.toLowerCase();
 
-              // Etiketi dışarı doğru hizala
-              const labelDist = RADIUS + 28;
+              const labelDist = RADIUS + 24;
               const lx = CX + labelDist * Math.cos(pos.angle);
               const ly = CY + labelDist * Math.sin(pos.angle);
               const anchor =
@@ -273,25 +249,25 @@ export default function SalonGraph({
                     <circle
                       cx={pos.x}
                       cy={pos.y}
-                      r={13}
+                      r={12}
                       fill="none"
                       stroke="#fbbf24"
-                      strokeWidth="2"
+                      strokeWidth="1.5"
                     />
                   )}
                   <circle
                     cx={pos.x}
                     cy={pos.y}
-                    r={cIdx !== undefined ? 8 : 5.5}
+                    r={cIdx !== undefined ? 7.5 : 5.5}
                     fill={color}
-                    stroke="#090910"
+                    stroke="#07070c"
                     strokeWidth="2"
                   />
                   <text
                     x={lx}
                     y={ly + 3}
                     textAnchor={anchor}
-                    fill={cIdx !== undefined ? "#e4e4e7" : "#71717a"}
+                    fill={cIdx !== undefined ? "#e4e4e7" : "#8e8ea8"}
                     fontSize="9.5"
                     fontWeight={cIdx !== undefined ? "600" : "400"}
                   >
@@ -304,10 +280,9 @@ export default function SalonGraph({
         </div>
 
         {lastTx && (
-          <div className="bg-emerald-950/40 border border-emerald-700/50 rounded-xl px-3.5 py-2 text-xs flex items-center justify-between text-emerald-200">
+          <div className="mt-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3.5 py-2 text-xs flex items-center justify-between text-emerald-200 animate-fade-in">
             <span>
-              ✓ {lastTx.length} stickerlık salon halkası atomik olarak yürütüldü (
-              {lastTx.latencyMs}ms)
+              ✓ {lastTx.length} stickerlık halka yürütüldü ({lastTx.latencyMs}ms)
             </span>
             <a
               href={`${MONAD_TESTNET.explorer}/tx/${lastTx.txHash}`}
@@ -315,86 +290,79 @@ export default function SalonGraph({
               rel="noopener noreferrer"
               className="underline font-mono text-emerald-300"
             >
-              tx/{lastTx.txHash.slice(0, 10)}... ↗
+              tx/{lastTx.txHash.slice(0, 10)}… ↗
             </a>
           </div>
         )}
-      </div>
+      </SpotlightCard>
 
-      {/* SAĞ: AKTİF SALON HALKALARI VE HIZLI KATILIM (4 KOLON) */}
-      <div className="lg:col-span-4 flex flex-col gap-4">
-        <div className="bg-[#0e0e18] border border-zinc-800/90 rounded-2xl p-5 shadow-xl flex-1">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-3">
-            Bulunan Salon Halkaları ({cycles.length})
+      <div className="lg:col-span-4 flex flex-col gap-5">
+        <SpotlightCard className="p-5 flex-1">
+          <h3 className="text-sm font-semibold text-white mb-3">
+            Aktif Salon Halkaları ({cycles.length})
           </h3>
 
-          <div className="space-y-3">
-            {cycles.map((cyc, idx) => {
-              const color = CYCLE_COLORS[idx % CYCLE_COLORS.length];
-              const isSelected = selectedCycleIdx === idx;
-              return (
-                <div
-                  key={idx}
-                  onClick={() => setSelectedCycleIdx(idx)}
-                  className={`p-3.5 rounded-xl border transition cursor-pointer ${
-                    isSelected
-                      ? "bg-zinc-900 border-zinc-600"
-                      : "bg-[#090910] border-zinc-800/80 hover:border-zinc-700"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: color }}
-                      />
-                      <span className="text-xs font-bold text-white">
-                        Halka #{idx + 1} ({cyc.items.length} Sticker)
+          {cycles.length === 0 ? (
+            <div className="text-xs text-zinc-400 bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 leading-relaxed">
+              Henüz kapanmış bir sticker halkası yok.{" "}
+              <strong className="text-zinc-200">3 Rastgele Sticker Al</strong>{" "}
+              butonuna basıp aşağıdan tercih sıralamanı kaydederek ilk halkayı
+              başlatabilirsin.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {cycles.map((cyc, idx) => {
+                const color = CYCLE_COLORS[idx % CYCLE_COLORS.length];
+                const isSelected = selectedCycleIdx === idx;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedCycleIdx(idx)}
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-white/[0.05] border-white/[0.15]"
+                        : "bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="text-xs font-semibold text-white">
+                          Halka #{idx + 1} ({cyc.items.length} Sticker)
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-emerald-400">
+                        TTC ✓
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono text-emerald-400">
-                      verifyTTCStep: true
-                    </span>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRunCycle(cyc);
+                      }}
+                      disabled={isExecuting}
+                      className="w-full mt-2 py-1.5 rounded-lg text-xs font-semibold bg-[#836EF9]/20 hover:bg-[#836EF9] text-purple-200 hover:text-white transition-all cursor-pointer"
+                    >
+                      Atomik Yürüt ({cyc.items.length} Transfer)
+                    </button>
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </SpotlightCard>
 
-                  <div className="text-[11px] text-zinc-400 font-mono mb-3">
-                    {cyc.items
-                      .map(
-                        (id) =>
-                          items.find((it) => it.id === id)?.label.split(" ")[0] ||
-                          `#${id}`
-                      )
-                      .join(" → ")}{" "}
-                    → ↺
-                  </div>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRunCycle(cyc);
-                    }}
-                    disabled={isExecuting}
-                    className="w-full py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-[#836EF9] text-zinc-200 hover:text-white transition cursor-pointer"
-                  >
-                    Bu Halkayı Atomik Yürüt ({cyc.items.length} Transfer)
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Paralel Yürütme Notu */}
-        <div className="bg-[#0e0e18] border border-zinc-800/90 rounded-2xl p-4 text-xs text-zinc-400 space-y-1.5">
-          <div className="text-white font-semibold">
-            ⚡ Neden Monad Paralel EVM?
-          </div>
-          <p className="leading-relaxed">
-            Birbirini kesmeyen ayrık takas döngüleri farklı depolama
-            slotlarına dokunur. Monad&apos;ın paralel yürütücüsü bu {cycles.length}{" "}
-            halkayı çakışmasız eşzamanlı işler.
-          </p>
-        </div>
+        <SpotlightCard className="p-4 text-xs text-zinc-400 leading-relaxed">
+          <strong className="text-zinc-200 block mb-1">
+            ⚡ Paralel Yürütme
+          </strong>
+          Birbirini kesmeyen takas halkaları farklı depolama alanlarına dokunur;
+          Monad paralel yürütücüsü bunları eşzamanlı işler.
+        </SpotlightCard>
       </div>
     </div>
   );
