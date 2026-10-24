@@ -795,7 +795,12 @@ export default function TurkeyMap({
               <span>
                 Bir şehre tıklayarak tercihlerini görebilir veya{" "}
                 <strong className="text-zinc-200">Halkayı Bul</strong> ile
-                döngüyü yakabilirsiniz.
+                döngüyü yakabilirsiniz. Burada 20 kadro var; gerçekte{" "}
+                <strong className="text-zinc-200">
+                  binlerce kadro ve kişi başına onlarca tercih
+                </strong>{" "}
+                oluyor &mdash; halka aramanın asıl değeri orada, çünkü o
+                ölçekte eşleşmeler elle bulunamıyor.
               </span>
               <button
                 onClick={() => void handleRevertSimulation()}

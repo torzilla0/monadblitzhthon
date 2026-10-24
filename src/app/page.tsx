@@ -376,6 +376,11 @@ export default function HomePage() {
               </span>{" "}
               aynı anda taşır — ya herkes geçer ya hiçbiri.
             </p>
+            <p className="text-xs text-zinc-500">
+              Aynı sıkışma hemşire nöbetinde, yurt odasında, ikinci el takasında
+              da var. Binlerce kişi ve kişi başına onlarca tercih olduğunda
+              eşleşmeler elle bulunamıyor — halka araması tam orada işe yarıyor.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
