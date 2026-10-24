@@ -648,6 +648,17 @@ export default function TurkeyMap({
               const pos = itemCoords.get(item.id);
               if (!pos) return null;
 
+              // Bir kadro seçiliyse haritayı o kadronun çevresine indiriyoruz:
+              // kendisi, istediği kadrolar ve seçili halka. Yirmiden fazla il
+              // etiketini aynı anda göstermek haritayı okunmaz yapıyordu.
+              if (selectedItemId !== null) {
+                const relevant =
+                  item.id === selectedItemId ||
+                  (wants[selectedItemId] ?? []).includes(item.id) ||
+                  (activeCycle?.items.includes(item.id) ?? false);
+                if (!relevant) return null;
+              }
+
               const stepNum = cycleNodeOrder.get(item.id);
               const isInLitCycle = stepNum !== undefined;
               const isSelected = selectedItemId === item.id;
