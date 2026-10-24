@@ -207,3 +207,35 @@ Rubrikte "upfront about what's unfinished" puan getiriyor. Videonun sonunda:
 2. Garantiler leksikografik tercih varsayıyor; genel tercihlerde strict core boş olabilir.
 3. En iyi döngü kümesini bulmak NP-hard; biz sezgisel arıyoruz.
 4. Döngü arama off-chain; yürütme ve doğrulama zincirde.
+
+---
+
+## BACKEND HAZIR — brief'ten sapmalar (frontend okusun)
+
+Kontrat canlı: **`0x118bb2018ca413a961f627ebf3b01afd6cd8eee7`** (Monad Testnet 10143).
+20 kadro seed'li, 11'li halka hazır, `verifyTTCStep(halka) == true` zincirde doğrulandı.
+11 kişilik döngü tek işlemde yürütüldüğü kanıtlandı: tx `0xba04c5bd...98bd9`.
+
+Brief'e göre değişenler:
+
+1. **Zincir tanımını KENDİN YAZMA.** `src/lib/chain.ts` içinde var.
+   `import { monadTestnet, RPC_URL } from "@/lib/halka"` ile al.
+   FRONTEND.md'de `wallet.ts` içinde tanımla diyordu — artık gerek yok, çakışır.
+2. **ABI, adres ve tipler** `src/lib/halka.ts` içinde, üretilen dosya. Elle düzenlemeyin.
+   `Item`, `Cycle`, `StateResponse`, `CyclesResponse`, `FundResponse` hepsi orada.
+3. **Multicall3 gerekmiyor.** Kontratın `snapshot()` fonksiyonu tüm tahtayı tek
+   RPC çağrısında döndürüyor; `/api/state` bunu kullanıyor.
+4. **`src/lib/cities.ts` hazır** — `RING_CITIES`, `NOISE_CITIES`, `cityOfLabel(label)`
+   ve `project(city, width, height)` (lat/lon → SVG x/y). Harita için bunu kullan.
+5. **`src/lib/cycles.ts`** döngü bulucuyu barındırıyor; `/api/cycles` zaten çağırıyor,
+   frontend'in doğrudan kullanmasına gerek yok.
+6. **ERC-1155 yok.** Sahiplik kontratın içinde. `claimStickers(n)` salon modu için
+   doğrudan çağrılır (kullanıcı kendi cüzdanıyla, max 3).
+7. **Gas verirken limiti ve maxFeePerGas'ı elle geç.** Monad gas'ı *limit* üzerinden
+   kesiyor: `{ gas: 150000n, maxFeePerGas: 120000000000n, maxPriorityFeePerGas: 1000000000n }`.
+8. **`/api/fund` sırayla çalışıyor** (~2 saniyede bir cüzdan). Sebebi Monad'ın 10 MON
+   reserve balance'ı — README'de yazılı. Salonda sıra olursa normal.
+
+Üç rota da testnet'e karşı test edildi ve çalışıyor:
+`/api/state?kind=0`, `/api/cycles?kind=0`, `POST /api/fund`.
+`/api/cycles` şu an 11'li ve 9'lu iki döngü döndürüyor, ikisi de `isTopChoice: true`.
