@@ -25,6 +25,30 @@ export default function TeacherTable({
   onSelectItem?: (id: number) => void;
 }) {
   const [onlyCycle, setOnlyCycle] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [genMessage, setGenMessage] = useState<string | null>(null);
+
+  // Zincire gerçekten yazar; tarayıcıda sahte satır üretmez. Tablo ve halka
+  // bulucu zinciri okuduğu için sahte veri eklersek ikisi birbirini tutmazdı.
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setGenMessage("30 öğretmen üretiliyor ve Monad Testnet'e yazılıyor…");
+    try {
+      const r = await fetch("/api/seed-random", { method: "POST" }).then((x) =>
+        x.json()
+      );
+      setGenMessage(
+        r.ok
+          ? `${r.created} yeni öğretmen zincire yazıldı (kadro #${r.firstId}–#${r.lastId}). ` +
+              `Her birine 2–4 tercih atandı. Harita ve halkalar birkaç saniye içinde güncellenecek.`
+          : `Oluşturulamadı: ${r.error}`
+      );
+    } catch {
+      setGenMessage("Oluşturulamadı: zincire ulaşılamadı.");
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const cityOf = (id: number) =>
     items.find((it) => it.id === id)?.label.split("/")[0].trim() ?? `#${id}`;
@@ -50,18 +74,42 @@ export default function TeacherTable({
           </p>
         </div>
 
-        <button
-          onClick={() => setOnlyCycle((v) => !v)}
-          disabled={activeCycleItems.length === 0}
-          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-            onlyCycle
-              ? "bg-[#836EF9]/15 border-[#836EF9]/60 text-purple-200"
-              : "bg-white/[0.03] border-white/[0.08] text-zinc-300 hover:bg-white/[0.06]"
-          }`}
-        >
-          {onlyCycle ? "Hepsini göster" : "Sadece seçili halka"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setOnlyCycle((v) => !v)}
+            disabled={activeCycleItems.length === 0}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+              onlyCycle
+                ? "bg-[#836EF9]/15 border-[#836EF9]/60 text-purple-200"
+                : "bg-white/[0.03] border-white/[0.08] text-zinc-300 hover:bg-white/[0.06]"
+            }`}
+          >
+            {onlyCycle ? "Hepsini göster" : "Sadece seçili halka"}
+          </button>
+
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            title="30 yeni öğretmen üretir ve zincire yazar (gerçek işlem)"
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            {generating ? (
+              <>
+                <span className="w-3 h-3 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin" />
+                Zincire yazılıyor…
+              </>
+            ) : (
+              "🎲 Rastgele 30 Öğretmen Oluştur"
+            )}
+          </button>
+        </div>
       </div>
+
+      {genMessage && (
+        <div className="mb-4 text-xs rounded-xl px-3.5 py-2.5 bg-white/[0.03] border border-white/[0.08] text-zinc-300 leading-relaxed">
+          {genMessage}
+        </div>
+      )}
 
       <div className="overflow-x-auto -mx-1">
         <table className="w-full text-xs border-collapse">

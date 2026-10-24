@@ -175,6 +175,7 @@ export default function TurkeyMap({
     cycleItems: number[];
     swappedTeachers: Record<number, string>;
   } | null>(null);
+  const [cyclePickerOpen, setCyclePickerOpen] = useState<boolean>(false);
   const [revertProofMessage, setRevertProofMessage] = useState<string | null>(
     null
   );
@@ -367,33 +368,62 @@ export default function TurkeyMap({
             {/* Halka seçici: bulunan her halka kendi numarasıyla listelenir.
                 Önceden "Halkayı Bul" ve "2. Halka" diye iki ayrı düğme vardı
                 ve ikisinin ilişkisi belirsizdi. */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-zinc-500 mr-0.5">
-                Bulunan halkalar:
-              </span>
-              {cycles.length === 0 && (
-                <span className="text-[11px] text-zinc-600">
-                  henüz kapanan bir halka yok
+            {/* Tek düğme: seçili halkayı gösterir, tıklanınca diğerleri açılır. */}
+            <div className="relative">
+              <button
+                onClick={() => setCyclePickerOpen((v) => !v)}
+                disabled={cycles.length === 0}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 cursor-pointer flex items-center gap-2 border disabled:opacity-40 disabled:cursor-not-allowed ${
+                  cyclePickerOpen
+                    ? "bg-[#836EF9] border-[#836EF9] text-white"
+                    : "bg-white/[0.03] border-white/[0.08] text-zinc-200 hover:bg-white/[0.06]"
+                }`}
+              >
+                <span>
+                  {cycles.length === 0
+                    ? "Kapanan halka yok"
+                    : `Şu an seçili halka · ${activeCycle?.items.length ?? 0} kadro`}
                 </span>
+                <span className="text-[10px] opacity-70">
+                  {cyclePickerOpen ? "▲" : "▼"}
+                </span>
+              </button>
+
+              {cyclePickerOpen && cycles.length > 0 && (
+                <div className="absolute z-40 mt-2 right-0 min-w-[240px] rounded-xl border border-white/[0.1] bg-[#0c0c14] shadow-2xl p-1.5">
+                  <div className="px-2.5 py-1.5 text-[11px] text-zinc-500">
+                    {cycles.length} kapanan halka bulundu
+                  </div>
+                  {cycles.map((c, i) => {
+                    const isActive = activeCycleIndex === i;
+                    return (
+                      <button
+                        key={`cycle-${i}-${c.items[0]}`}
+                        onClick={() => {
+                          handleFindCycle(i);
+                          setCyclePickerOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition flex items-center justify-between gap-3 cursor-pointer ${
+                          isActive
+                            ? "bg-[#836EF9]/20 text-purple-100"
+                            : "text-zinc-300 hover:bg-white/[0.05]"
+                        }`}
+                      >
+                        <span>
+                          <span className="font-mono text-zinc-500 mr-1.5">
+                            #{i + 1}
+                          </span>
+                          {c.items.length} kadrolu halka
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[90px]">
+                          {c.items.slice(0, 3).join("→")}
+                          {c.items.length > 3 ? "→…" : ""}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-              {cycles.map((c, i) => {
-                const isActive = activeCycleIndex === i;
-                return (
-                  <button
-                    key={`cycle-${i}-${c.items[0]}`}
-                    onClick={() => handleFindCycle(i)}
-                    title={`Halka #${i + 1}: ${c.items.length} kadro — ${c.items.join(" → ")}`}
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 cursor-pointer flex items-center gap-1.5 border ${
-                      isActive
-                        ? "bg-[#836EF9] border-[#836EF9] text-white shadow-lg shadow-[#836EF9]/20"
-                        : "bg-white/[0.03] border-white/[0.08] text-zinc-300 hover:bg-white/[0.06]"
-                    }`}
-                  >
-                    <span className="font-mono opacity-70">#{i + 1}</span>
-                    <span>{c.items.length} kadro</span>
-                  </button>
-                );
-              })}
             </div>
 
             <button
@@ -850,33 +880,51 @@ export default function TurkeyMap({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Bugünkü yöntem ile Halka'yı yan yana koyuyoruz: asıl anlatmak
+              istediğimiz şey maliyet değil, ikili takasın bu işi hiç
+              yapamadığı. */}
+          <div className="space-y-2.5">
             <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5">
-              <div className="text-xs text-zinc-400">Bu Halka</div>
-              <div className="text-xl font-bold text-white mt-0.5 font-mono">
-                {cycleLength} Transfer
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-400">
+                  Bugünkü yöntem — ikili becayiş
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/25">
+                  mümkün değil
+                </span>
               </div>
-              <div className="text-[11px] text-zinc-500 mt-0.5">
-                Tek atomik işlem
+              <div className="text-xl font-bold text-zinc-300 mt-1 font-mono">
+                {Math.ceil(cycleLength / 2)} ayrı anlaşma
+              </div>
+              <div className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                Her biri ayrı dilekçe, ayrı onay, ayrı gün. Ve hiçbiri
+                tutmuyor: bu {cycleLength} kişiden{" "}
+                <strong className="text-zinc-400">hiçbir ikisi</strong>{" "}
+                birbirinin yerini istemiyor.
               </div>
             </div>
 
-            <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5">
-              <div className="text-xs text-zinc-400">Toplam Ağ Ücreti</div>
-              <div className="text-xl font-bold text-emerald-400 mt-0.5 font-mono">
-                ~${usdCost}
+            <div className="bg-emerald-500/[0.04] border border-emerald-500/20 rounded-xl p-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-emerald-300">Halka ile</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
+                  tek işlem
+                </span>
               </div>
-              <div className="text-[11px] text-zinc-500 mt-0.5 font-mono">
-                {monCost} MON · 300ms
+              <div className="text-xl font-bold text-white mt-1 font-mono">
+                {cycleLength} taşınma
+              </div>
+              <div className="text-[11px] text-zinc-400 mt-1 font-mono">
+                ~${usdCost} · {monCost} MON · 300ms
               </div>
             </div>
           </div>
 
-          <p className="text-xs text-zinc-400 mt-4 leading-relaxed">
-            Fiziksel dünyada &ldquo;kim önce istifa edecek?&rdquo; riski
-            yüzünden takaslar 2–3 kişide tıkanır. Kontratta{" "}
-            <strong className="text-zinc-200">{cycleLength} kişi</strong> ya
-            aynı anda yer değiştirir ya da hiçbiri.
+          <p className="text-xs text-zinc-400 mt-3.5 leading-relaxed">
+            İkili takas bu halkayı <strong className="text-zinc-200">hiç</strong>{" "}
+            kuramaz; mesele ücret değil, eşleşmenin olmaması. Halka ise{" "}
+            {cycleLength} kişiyi aynı işlemde taşıyor &mdash; ya hepsi, ya
+            hiçbiri.
           </p>
         </SpotlightCard>
 
