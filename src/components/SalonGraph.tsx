@@ -108,7 +108,7 @@ export default function SalonGraph({
               </span>
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Mod B — Canlı Salon Sticker Takas Grafı · Ayrık halkalar Monad&apos;da
+              Canlı Salon — sticker takası · Ayrık halkalar Monad&apos;da
               paralel yürütülür
             </p>
           </div>

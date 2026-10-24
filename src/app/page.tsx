@@ -7,10 +7,6 @@ import PreferencePanel from "../components/PreferencePanel";
 import {
   type Item,
   type Cycle,
-  FIXTURE_ITEMS,
-  FIXTURE_WANTS,
-  FIXTURE_SALON_ITEMS,
-  FIXTURE_SALON_WANTS,
   findCyclesClient,
   MONAD_TESTNET,
   HALKA_ADDRESS,
@@ -36,21 +32,17 @@ export default function HomePage() {
   );
   const [dataSource, setDataSource] = useState<"live" | "fixture">("fixture");
 
-  // Mod A (Becayiş) durumu
-  const [becayisItems, setBecayisItems] = useState<Item[]>(FIXTURE_ITEMS);
-  const [becayisWants, setBecayisWants] =
-    useState<Record<number, number[]>>(FIXTURE_WANTS);
-  const [becayisCycles, setBecayisCycles] = useState<Cycle[]>(() =>
-    findCyclesClient(FIXTURE_ITEMS, FIXTURE_WANTS)
-  );
+  // Zincir okunana kadar HİÇBİR ŞEY gösterilmez. Daha önce burada fixture
+  // verisi duruyordu ve sayfa ilk 2-3 saniye 24 kadro / 12 şehirlik bir halka
+  // gösteriyordu; zincirde ise 20 kadro ve 11'lik bir halka var. Videonun ilk
+  // karesi yanlış sayı gösteriyordu.
+  const [becayisItems, setBecayisItems] = useState<Item[]>([]);
+  const [becayisWants, setBecayisWants] = useState<Record<number, number[]>>({});
+  const [becayisCycles, setBecayisCycles] = useState<Cycle[]>([]);
 
-  // Mod B (Salon) durumu
-  const [salonItems, setSalonItems] = useState<Item[]>(FIXTURE_SALON_ITEMS);
-  const [salonWants, setSalonWants] =
-    useState<Record<number, number[]>>(FIXTURE_SALON_WANTS);
-  const [salonCycles, setSalonCycles] = useState<Cycle[]>(() =>
-    findCyclesClient(FIXTURE_SALON_ITEMS, FIXTURE_SALON_WANTS)
-  );
+  const [salonItems, setSalonItems] = useState<Item[]>([]);
+  const [salonWants, setSalonWants] = useState<Record<number, number[]>>({});
+  const [salonCycles, setSalonCycles] = useState<Cycle[]>([]);
 
   const [selectedItemId, setSelectedItemId] = useState<number | null>(1);
   const [isClaiming, setIsClaiming] = useState<boolean>(false);
@@ -269,11 +261,13 @@ export default function HomePage() {
     }
   }, [isClaiming, salonItems, salonWants, myAddress]);
 
+  // "Sıfırla" artık fixture'a dönmez -- zinciri yeniden okur. Tahtayı gerçekten
+  // başa almak için backend'de `npx tsx scripts/seed.ts` çalıştırılır.
   const handleResetDemo = useCallback(() => {
-    setBecayisItems(FIXTURE_ITEMS);
-    setBecayisWants(FIXTURE_WANTS);
-    setBecayisCycles(findCyclesClient(FIXTURE_ITEMS, FIXTURE_WANTS));
-    setSelectedItemId(1);
+    setBecayisItems([]);
+    setBecayisWants({});
+    setBecayisCycles([]);
+    setSelectedItemId(null);
   }, []);
 
   const currentItems = mode === 0 ? becayisItems : salonItems;
@@ -299,7 +293,7 @@ export default function HomePage() {
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                Atomik N-Taraflı Takas Motoru · Leksikografik MTTC (Strict Core)
+                Üç veya daha fazla kişi, aynı anda yer değiştirir
               </p>
             </div>
           </div>
@@ -317,7 +311,7 @@ export default function HomePage() {
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              🗺️ Mod A: Becayiş Haritası (Ana Gösteri)
+              🗺️ Becayiş Haritası
             </button>
             <button
               onClick={() => {
@@ -330,7 +324,7 @@ export default function HomePage() {
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              🕸️ Mod B: Canlı Salon Grafı
+              🕸️ Canlı Salon
             </button>
           </div>
 
@@ -370,30 +364,96 @@ export default function HomePage() {
 
       {/* ANA İÇERİK */}
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 py-4 space-y-5">
-        {/* Problem Özeti Banner (0-18s Hikayesi) */}
-        <div className="bg-gradient-to-r from-[#836EF9]/15 via-[#0e0e18] to-emerald-500/10 border border-zinc-800/90 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs sm:text-sm text-zinc-200">
-            <strong className="text-white">Problem (657 / Madde 73):</strong>{" "}
-            Hakkari&apos;deki öğretmen Ankara&apos;ya, Ankara&apos;daki İzmir&apos;e,
-            İzmir&apos;deki Hakkari&apos;ye gitmek istiyor. Mevzuat{" "}
-            <span className="text-amber-300 font-semibold">
-              yalnızca 2 kişilik
-            </span>{" "}
-            becayişe izin verdiği ve{" "}
-            <span className="text-rose-300 font-semibold">
-              &ldquo;kim önce istifa edecek?&rdquo;
-            </span>{" "}
-            riski olduğu için gidemiyorlar.
+        {/* GİRİŞ — gündelik dilde, kısaltmasız. Buraya kadar hiçbir teknik
+            terim geçmez; teknik taraf aşağıdaki panellerde durur. */}
+        <section className="bg-gradient-to-r from-[#836EF9]/15 via-[#0e0e18] to-emerald-500/10 border border-zinc-800/90 rounded-2xl px-5 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-3xl">
+              <h2 className="text-xl sm:text-2xl font-extrabold text-white leading-snug">
+                Bir öğretmen Hakkari&apos;de, Ankara&apos;ya gelmek istiyor.
+                <br className="hidden sm:block" />
+                Ankara&apos;da Hakkari&apos;ye gitmek isteyen kimse yok.
+              </h2>
+              <p className="mt-3 text-sm sm:text-base text-zinc-300 leading-relaxed">
+                Ama Ankara&apos;da İzmir&apos;e, İzmir&apos;de Hakkari&apos;ye
+                gitmek isteyen var. Üçü de istediği yere gidebilir &mdash; yine de
+                gidemiyorlar, çünkü yer değiştirme{" "}
+                <span className="text-amber-300 font-semibold">iki kişilik</span>.
+                Üç kişilik bir halka için{" "}
+                <span className="text-rose-300 font-semibold">
+                  &ldquo;kim önce istifa edecek?&rdquo;
+                </span>{" "}
+                sorusunun cevabı yok.
+              </p>
+              <p className="mt-3 text-sm sm:text-base text-white font-semibold">
+                Halka bu halkaları buluyor ve herkesi tek seferde taşıyor. Ya
+                hepsi taşınır, ya hiçbiri.
+              </p>
+            </div>
+            <a
+              href={`${MONAD_TESTNET.explorer}/address/${HALKA_ADDRESS}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 text-xs font-mono text-[#a78bfa] hover:text-white bg-[#090910] border border-[#836EF9]/30 px-3 py-1.5 rounded-xl transition"
+            >
+              Kontrat: {HALKA_ADDRESS.slice(0, 10)}...{HALKA_ADDRESS.slice(-6)} ↗
+            </a>
           </div>
-          <a
-            href={`${MONAD_TESTNET.explorer}/address/${HALKA_ADDRESS}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-mono text-[#a78bfa] hover:text-white bg-[#090910] border border-[#836EF9]/30 px-3 py-1.5 rounded-xl transition"
-          >
-            Kontrat: {HALKA_ADDRESS.slice(0, 10)}...{HALKA_ADDRESS.slice(-6)} ↗
-          </a>
-        </div>
+
+          {/* NASIL KULLANILIR — üç adım */}
+          <div className="mt-5 grid sm:grid-cols-3 gap-3">
+            {[
+              {
+                n: "1",
+                t: "Kadronu seç",
+                d: "Şu an nerede çalıştığını işaretle.",
+              },
+              {
+                n: "2",
+                t: "Gitmek istediklerini sırala",
+                d: "Birden fazla şehir seç, en çok istediğini en üste koy.",
+              },
+              {
+                n: "3",
+                t: "Halka kapanınca taşın",
+                d: "Sistem kapanan bir halka bulduğunda herkes aynı anda yer değiştirir.",
+              },
+            ].map((s) => (
+              <div
+                key={s.n}
+                className="bg-[#090910]/80 border border-zinc-800 rounded-xl px-4 py-3"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-lg bg-[#836EF9]/25 border border-[#836EF9]/40 text-[#a78bfa] text-xs font-bold flex items-center justify-center">
+                    {s.n}
+                  </span>
+                  <span className="text-sm font-semibold text-white">{s.t}</span>
+                </div>
+                <p className="mt-1.5 text-xs text-zinc-400 leading-relaxed">
+                  {s.d}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-4 text-xs text-zinc-500">
+            Aynı sıkışma öğretmen tayininde, hemşire nöbetinde, yurt odasında,
+            ikinci el takasında var. Nerede &ldquo;ben seninkini istiyorum ama sen
+            benimkini istemiyorsun&rdquo; varsa, bir halka kurulabilir.
+          </p>
+        </section>
+
+        {/* Zincir okunana kadar sahte sayı göstermek yerine bunu göster. */}
+        {currentItems.length === 0 && (
+          <div className="bg-[#0b0b13] border border-zinc-800 rounded-2xl px-5 py-4 text-sm text-zinc-400 flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#836EF9] animate-pulse" />
+            Monad Testnet&apos;ten okunuyor&hellip; (kontrat{" "}
+            <span className="font-mono text-zinc-300">
+              {HALKA_ADDRESS.slice(0, 10)}…
+            </span>
+            )
+          </div>
+        )}
 
         {/* MOD A VEYA MOD B GÖRÜNÜMÜ */}
         {mode === 0 ? (

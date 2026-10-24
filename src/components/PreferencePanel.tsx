@@ -143,7 +143,7 @@ export default function PreferencePanel({
       <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-zinc-800/80">
         <div>
           <span className="text-xs font-mono uppercase tracking-wider text-[#a78bfa] bg-[#836EF9]/15 px-2.5 py-0.5 rounded border border-[#836EF9]/30">
-            MTTC Leksikografik Tercih Girişi
+            Tercihlerini sırala
           </span>
           <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">
             Çoklu Seçim &amp; Sıralama Arayüzü

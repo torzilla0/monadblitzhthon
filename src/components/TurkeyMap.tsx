@@ -234,10 +234,35 @@ export default function TurkeyMap({
     }
   };
 
-  const handleRevertSimulation = () => {
-    setRevertProofMessage(
-      'REVERT KANITI: "executeCycle([1, 2, 12])" çağrıldı -> Kadro #12 (İstanbul), Kadro #1 (Hakkari) kadrosunu istemediği için (_rank[12][1] == 0 -> WantMissing) işlem zincir üstünde tamamen REVERT etti. 0/3 transfer gerçekleşti; kimse açıkta kalmadı.'
-    );
+  // Bu panel eskiden sabit bir metin yazdırıyordu ve metin yanlıştı: hatayı
+  // WantMissing diye anıyordu (kontratta TargetNotWanted) ve kopan bağı yanlış
+  // gösteriyordu. Artık /api/simulate ile zincire soruyoruz: eth_call, işlem
+  // gönderilmiyor, gas harcanmıyor, cevabı node veriyor.
+  const handleRevertSimulation = async () => {
+    setRevertProofMessage("Zincire soruluyor…");
+    try {
+      const r = await fetch("/api/simulate?cycle=1,2,12", {
+        cache: "no-store",
+      }).then((x) => x.json());
+
+      if (r.ok) {
+        setRevertProofMessage(
+          `Beklenmedik: zincir bu halkayı kabul ediyor (${r.transfersThatWouldHappen} transfer).`
+        );
+        return;
+      }
+
+      const who =
+        Array.isArray(r.args) && r.args.length >= 2
+          ? ` — ${r.args[0]} numaralı kadro, ${r.args[1]} numaralı kadroyu istemiyor`
+          : "";
+      setRevertProofMessage(
+        `ZİNCİRİN CEVABI — executeCycle([1, 2, 12]) → ${r.error}${who}. ` +
+          `${r.transfersThatHappened}/3 transfer gerçekleşti: işlem tamamen geri alındı, kimse açıkta kalmadı.`
+      );
+    } catch {
+      setRevertProofMessage("Zincire ulaşılamadı, tekrar deneyin.");
+    }
   };
 
   const handleFullReset = () => {
@@ -274,12 +299,12 @@ export default function TurkeyMap({
             <div className="flex items-center gap-2">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#836EF9] animate-pulse" />
               <h2 className="text-base sm:text-lg font-bold tracking-tight text-white">
-                Mod A — Türkiye Becayiş Haritası (657 / Madde 73)
+                Türkiye Becayiş Haritası
               </h2>
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
               {items.length} aktif kadro · {cycles.length} ayrık takas halkası
-              bulundu · Leksikografik MTTC Çözücü
+              bulundu · halka bulucu çalışıyor
             </p>
           </div>
 
@@ -738,7 +763,7 @@ export default function TurkeyMap({
                 💡 <strong>Nasıl Çalışır?</strong> Haritadaki bir şehre
                 tıklayarak tercihlerini düzenleyebilir veya{" "}
                 <strong className="text-white">&ldquo;Halkayı Bul&rdquo;</strong>{" "}
-                ile 11 şehirlik döngüyü yakabilirsiniz.
+                ile sistemin bulduğu halkayı yakabilirsiniz.
               </span>
               <button
                 onClick={handleRevertSimulation}
@@ -787,11 +812,11 @@ export default function TurkeyMap({
           </div>
 
           <p className="text-xs text-zinc-400 mt-3 leading-relaxed">
-            Takas literatürü (Abraham, Blum &amp; Sandholm EC &apos;07) fiziksel
-            eşzamanlılık imkânsız olduğu için döngüleri <strong>3 kişide</strong>{" "}
-            keser. Akıllı kontratta eşzamanlılık bedavadır:{" "}
-            <strong>11 kişi</strong> ya aynı işlemde yer değiştirir ya da
-            hiçbiri.
+            Gerçek hayatta böyle halkalar <strong>üç kişide</strong> kesilir:
+            herkesin aynı anda taşınması gerekir ve kimse bunu garanti edemez.
+            Akıllı kontratta aynı anda olmak bedava &mdash;{" "}
+            <strong>{activeCycle ? activeCycle.items.length : "tüm"} kişi</strong>{" "}
+            ya aynı işlemde yer değiştirir ya da hiçbiri.
           </p>
         </div>
 
@@ -800,7 +825,7 @@ export default function TurkeyMap({
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-mono uppercase tracking-wider text-emerald-300 bg-emerald-500/15 px-2.5 py-1 rounded-md border border-emerald-500/30">
-                Matematiksel Garanti (MTTC)
+                Bu takasın garantisi
               </span>
               <span className="text-xs font-mono text-emerald-400 font-bold">
                 Roth (1982) · Ma (1994)
