@@ -311,19 +311,9 @@ export default function HomePage() {
             >
               🗺️ Becayiş Haritası
             </button>
-            <button
-              onClick={() => {
-                setMode(1);
-                setSelectedItemId(salonItems[0]?.id || 21);
-              }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer ${
-                mode === 1
-                  ? "bg-[#836EF9] text-white shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              🕸️ Canlı Salon
-            </button>
+            {/* "Canlı Salon" sekmesi gizlendi: demoda anlatılmıyor ve
+                anlatılmayan bir ekran jüriye açıklanmamış bir alan bırakıyor.
+                Kod duruyor; sekmeyi geri koymak yeterli. */}
           </div>
 
           {/* Sağ: Cüzdan & Kontrat */}
