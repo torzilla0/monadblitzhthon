@@ -46,13 +46,24 @@ function rng(seed: number) {
   };
 }
 
-export async function POST() {
+/** Seed script'inin yazdığı becayiş tahtası: bunlara asla dokunmuyoruz. */
+const BASE_BOARD = 20;
+
+export async function POST(req: Request) {
   const key = process.env.RELAYER_PRIVATE_KEY;
   if (!key) {
     return NextResponse.json({ ok: false, error: "relayer_not_configured" }, { status: 500 });
   }
 
-  const COUNT = 30;
+  let mode: "replace" | "append" = "replace";
+  let COUNT = 30;
+  try {
+    const body = await req.json();
+    if (body?.mode === "append") mode = "append";
+    if (Number.isInteger(body?.count)) COUNT = Math.min(30, Math.max(1, body.count));
+  } catch {
+    /* gövdesiz çağrı = varsayılan: 30 kişiyi yeniden üret */
+  }
 
   try {
     const admin = privateKeyToAccount(key as `0x${string}`);
@@ -67,8 +78,61 @@ export async function POST() {
       })
     );
 
-    const batch = Math.floor(before / COUNT) + 1;
-    const rand = rng(batch * 7919 + before);
+    const batch = before + 1;
+    const rand = rng(batch * 7919 + Date.now() % 100000);
+
+    // "Yeniden üret": kontratta kadro silme yok, o yüzden önceki rastgele
+    // partilerin TERCİHLERİNİ temizliyoruz. Tercihi olmayan kadro hiçbir
+    // halkaya giremez ve tabloda da gizleniyor, yani pratikte emekli oluyor.
+    // Becayiş tahtasının ilk BASE_BOARD kadrosuna dokunmuyoruz.
+    if (mode === "replace" && before > BASE_BOARD) {
+      // Sadece kind-0 (seed) kadroları temizlenebilir: seedWants kind-1
+      // sticker'larda NotSeededItem ile revert ediyor. Ayrıca zaten boş
+      // olanları da atlıyoruz, boşuna gas yakmayalım.
+      const snap = (await pub.readContract({
+        address: HALKA_ADDRESS,
+        abi: HALKA_ABI,
+        functionName: "snapshot",
+      })) as readonly [
+        readonly `0x${string}`[],
+        readonly (number | bigint)[],
+        readonly boolean[],
+        readonly string[],
+        readonly (number | bigint)[],
+        readonly (number | bigint)[],
+      ];
+      const kinds = snap[1];
+      const wantsLen = snap[5];
+
+      const stale: number[] = [];
+      for (let i = BASE_BOARD; i < kinds.length; i++) {
+        const id = i + 1;
+        if (Number(kinds[i]) === 0 && Number(wantsLen[i]) > 0) stale.push(id);
+      }
+      const empty = stale.map(() => [] as number[]);
+
+      if (stale.length === 0) {
+        // temizlenecek bir şey yok, doğrudan yeni partiye geç
+      } else {
+      const estClear = await pub.estimateContractGas({
+        address: HALKA_ADDRESS,
+        abi: HALKA_ABI,
+        functionName: "seedWants",
+        args: [stale, empty],
+        account: admin,
+      });
+      const hashClear = await wallet.writeContract({
+        address: HALKA_ADDRESS,
+        abi: HALKA_ABI,
+        functionName: "seedWants",
+        args: [stale, empty],
+        gas: (estClear * 120n) / 100n,
+        ...FEES,
+      });
+      await pub.waitForTransactionReceipt({ hash: hashClear });
+      await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
 
     const owners = Array.from({ length: COUNT }, (_, i) => ownerFor(batch, i));
     const labels = Array.from({ length: COUNT }, (_, i) => {

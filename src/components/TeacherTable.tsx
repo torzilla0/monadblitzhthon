@@ -30,21 +30,30 @@ export default function TeacherTable({
 
   // Zincire gerçekten yazar; tarayıcıda sahte satır üretmez. Tablo ve halka
   // bulucu zinciri okuduğu için sahte veri eklersek ikisi birbirini tutmazdı.
-  const handleGenerate = async () => {
+  const handleGenerate = async (mode: "replace" | "append", count: number) => {
     setGenerating(true);
-    setGenMessage("30 öğretmen üretiliyor ve Monad Testnet'e yazılıyor…");
+    setGenMessage(
+      mode === "replace"
+        ? `${count} öğretmen yeniden üretiliyor, öncekiler emekliye ayrılıyor…`
+        : `${count} öğretmen ekleniyor…`
+    );
     try {
-      const r = await fetch("/api/seed-random", { method: "POST" }).then((x) =>
-        x.json()
-      );
+      const r = await fetch("/api/seed-random", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, count }),
+      }).then((x) => x.json());
       setGenMessage(
         r.ok
-          ? `${r.created} yeni öğretmen zincire yazıldı (kadro #${r.firstId}–#${r.lastId}). ` +
-              `Her birine 2–4 tercih atandı. Harita ve halkalar birkaç saniye içinde güncellenecek.`
-          : `Oluşturulamadı: ${r.error}`
+          ? `${r.created} öğretmen zincire yazıldı (kadro #${r.firstId}–#${r.lastId}), her birine 2–4 tercih atandı. ` +
+              (mode === "replace"
+                ? "Önceki rastgele parti emekliye ayrıldı. "
+                : "") +
+              "Harita ve halkalar birkaç saniye içinde güncellenecek."
+          : `Olmadı: ${r.error}`
       );
     } catch {
-      setGenMessage("Oluşturulamadı: zincire ulaşılamadı.");
+      setGenMessage("Olmadı: zincire ulaşılamadı.");
     } finally {
       setGenerating(false);
     }
@@ -55,9 +64,19 @@ export default function TeacherTable({
   const branchOf = (id: number) =>
     items.find((it) => it.id === id)?.label.split("/")[1]?.trim() ?? "";
 
+  // Emekliye ayrılan kadrolar gizlenir: tercihi yok ve kimse onu istemiyor,
+  // yani hiçbir halkaya giremez. Kontratta silme olmadığı için "yeniden üret"
+  // eskilerin tercihlerini temizliyor; bu filtre de onları listeden düşürüyor.
+  const wantedByAnyone = new Set<number>();
+  for (const list of Object.values(wants)) for (const t of list) wantedByAnyone.add(t);
+  const live = items.filter(
+    (it) => (wants[it.id]?.length ?? 0) > 0 || wantedByAnyone.has(it.id)
+  );
+  const retiredCount = items.length - live.length;
+
   const rows = onlyCycle
-    ? items.filter((it) => activeCycleItems.includes(it.id))
-    : items;
+    ? live.filter((it) => activeCycleItems.includes(it.id))
+    : live;
 
   if (items.length === 0) return null;
 
@@ -69,8 +88,8 @@ export default function TeacherTable({
             Kayıtlı öğretmenler
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Sisteme girilen {items.length} kadro ve her birinin sıralı tercihi.
-            Halkalar bu tablodan çıkıyor.
+            Sisteme girilen {live.length} aktif kadro ve her birinin sıralı tercihi.
+            Halkalar bu tablodan çıkıyor.{retiredCount > 0 ? ` ${retiredCount} eski kayıt emekliye ayrıldı.` : ""}
           </p>
         </div>
 
@@ -88,9 +107,9 @@ export default function TeacherTable({
           </button>
 
           <button
-            onClick={handleGenerate}
+            onClick={() => handleGenerate("replace", 30)}
             disabled={generating}
-            title="30 yeni öğretmen üretir ve zincire yazar (gerçek işlem)"
+            title="30 öğretmeni yeniden üretir; önceki rastgele parti emekliye ayrılır (gerçek zincir işlemi)"
             className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
             {generating ? (
@@ -99,8 +118,17 @@ export default function TeacherTable({
                 Zincire yazılıyor…
               </>
             ) : (
-              "🎲 Rastgele 30 Öğretmen Oluştur"
+              "🎲 30 Öğretmen Yeniden Üret"
             )}
+          </button>
+
+          <button
+            onClick={() => handleGenerate("append", 5)}
+            disabled={generating}
+            title="Mevcut tahtaya 5 öğretmen ekler (gerçek zincir işlemi)"
+            className="px-3 py-1.5 rounded-xl text-xs font-medium border border-white/[0.08] bg-white/[0.03] text-zinc-300 hover:bg-white/[0.06] transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            + 5 Öğretmen Ekle
           </button>
         </div>
       </div>
