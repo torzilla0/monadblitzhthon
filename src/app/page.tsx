@@ -435,18 +435,9 @@ export default function HomePage() {
           onSelectItem={(id) => setSelectedItemId(id)}
         />
 
-        {/* TERCİH SIRALAMA PANELİ */}
-        <PreferencePanel
-          mode={mode}
-          items={currentItems}
-          wants={currentWants}
-          myAddress={myAddress}
-          selectedItemId={selectedItemId}
-          onSelectItem={(id) => setSelectedItemId(id)}
-          onSaveWants={handleSaveWants}
-          onClaimStickers={mode === 1 ? handleClaimStickers : undefined}
-          isClaiming={isClaiming}
-        />
+        {/* Tercih sıralama paneli kaldırıldı: tercihler zaten "Kayıtlı
+            öğretmenler" tablosunda sıralı olarak görünüyor, ikinci bir
+            düzenleme arayüzü sayfayı uzatıyordu. PreferencePanel repoda. */}
 
         {/* MİMARİ SINIRLAR — Göz yormayan açılır/kapanır alt bar */}
         <footer className="rounded-2xl bg-[#0c0c14]/60 border border-white/[0.06] px-5 py-3 text-xs text-zinc-400">

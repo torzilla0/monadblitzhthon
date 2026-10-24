@@ -856,12 +856,10 @@ export default function TurkeyMap({
                 oluyor &mdash; halka aramanın asıl değeri orada, çünkü o
                 ölçekte eşleşmeler elle bulunamıyor.
               </span>
-              <button
-                onClick={() => void handleRevertSimulation()}
-                className="text-xs font-mono text-zinc-400 hover:text-rose-300 transition-colors cursor-pointer"
-              >
-                Bozuk Halka Testi (eth_call) →
-              </button>
+              {/* "Bozuk Halka Testi" düğmesi gizlendi: demoda anlatmıyoruz ve
+                  anlatılmayan bir düğme jüride soru işareti bırakıyor.
+                  handleRevertSimulation ve /api/simulate duruyor; düğmeyi geri
+                  koymak yeterli. */}
             </div>
           )}
         </div>

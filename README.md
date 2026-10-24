@@ -1,160 +1,123 @@
-# Halka — atomic multi-party barter cycles on Monad
+# Halka — çok taraflı takas altyapısı
 
-Built at **Monad Blitz Ankara v4**, 24 October 2026. All code written during the event.
+**Monad Blitz Ankara v4** · 24 Ekim 2026 · tüm kod etkinlik içinde yazıldı
 
-**Live contract:** [`0x118bb2018ca413a961f627ebf3b01afd6cd8eee7`](https://testnet.monadscan.com/address/0x118bb2018ca413a961f627ebf3b01afd6cd8eee7) on Monad Testnet (chain 10143)
-
-**Proof it works:** an 11-party cycle settled in a single transaction →
-[`0xba04c5bd…98bd9`](https://testnet.monadscan.com/tx/0xba04c5bd56c4344ee650aac9005a268f78f817101ac05c621b587bf567998bd9)
+🔗 **Canlı:** https://halka-rosy.vercel.app
+📄 **Kontrat:** [`0x118bb201…d8eee7`](https://testnet.monadscan.com/address/0x118bb2018ca413a961f627ebf3b01afd6cd8eee7) · Monad Testnet (10143) · Monadscan'de doğrulanmış
+✅ **Kanıt:** 11 kişilik bir takas, [tek işlemde](https://testnet.monadscan.com/tx/0xba04c5bd56c4344ee650aac9005a268f78f817101ac05c621b587bf567998bd9)
 
 ---
 
-## What it does
+## Ne yapıyor
 
-Three or more people swap posts or items **in one transaction**, atomically.
+Üç veya daha fazla kişinin yer ya da eşya değiştirmesini **tek işlemde, atomik olarak** gerçekleştirir.
 
-The concrete problem: becayiş, the mutual-transfer right in Article 73 of Turkish
-law 657, is **two-person by construction** — two civil servants in the same
-service class petition together. So a teacher in Hakkari who wants Ankara is
-stuck unless someone in Ankara wants Hakkari. But if someone in Ankara wants
-İzmir and someone in İzmir wants Hakkari, all three could get what they want.
-Today they cannot: there is no three-person becayiş.
+İkili takas çoğu zaman tıkanır: A, B'nin yerini ister ama B, A'nınkini istemez. Oysa A→B→C→A şeklinde kapanan bir halka varsa üçü de istediğini alır. Halka bu halkaları bulur ve hepsini aynı anda taşır — **ya hepsi, ya hiçbiri.**
 
-Halka finds those cycles and executes them. Each participant lists, in order,
-which posts they would accept. The engine searches the directed graph for cycles
-and the contract executes each one atomically: **either every participant moves,
-or nobody does.**
+Örnek alan olarak **becayişi** (657 sayılı Kanun madde 73, memurların karşılıklı yer değiştirmesi) seçtik. Mevzuat yapısı gereği iki kişilik: aynı kurum, aynı hizmet sınıfı, karşılıklı dilekçe. Üç tarafın birlikte takası tanımlı bir yol değil. Bir sendika merkezi bir eşleştirme sistemi için MEB'e başvurdu; böyle bir sistem yok, insanlar Facebook gruplarında elle eşleşme arıyor.
 
-## Why this needs a blockchain
+Aynı sıkışma hemşire nöbetinde, yurt odasında, vardiya değişiminde, ikinci el takasında da var.
 
-The barter-exchange literature already solves cycle finding — kidney exchange is
-the canonical case. It caps cycles at length 2–3, and the reason is not
-mathematical. From Abraham, Blum & Sandholm (EC '07): long cycles are forbidden
-because *"for incentive reasons, all transplants in a cycle must be performed
-simultaneously."* Eleven simultaneous operating rooms is impossible, and if one
-party withdraws halfway the rest are harmed.
+## Neden blockchain
 
-Becayiş has exactly the same shape: in a three-person ring, **who resigns
-first?** The state can approve two petitions together. Nobody can move eleven
-people at once.
+Üç kişilik bir halkada **kim önce istifa eder?** Birinci istifa ettiğinde ikinci hâlâ görevdedir; vazgeçerse birinci hem işsiz hem evsiz kalır. Devlet iki dilekçeyi aynı anda onaylayabiliyor, on bir kişiyi kimse aynı anda çıkaramıyor.
 
-A smart contract is a simultaneous executor that needs no trusted party. Once
-simultaneity is free, the length cap disappears. That is the whole contribution.
+Akıllı kontrat, güvenilir bir aracıya ihtiyaç duymayan bir **eşzamanlı yürütücüdür**. `executeCycle` halkanın her bağını yeniden doğrular; biri geçersizse işlemin tamamı geri alınır. Arada çekilme diye bir şey yoktur, çünkü "ara" yoktur.
 
-Two further properties fall out of it: no money changes hands (Turkish civil
-service rules forbid bargaining over a posting, on pain of disciplinary action),
-and every step is publicly auditable.
+İkincisi: mevzuat görev yerinin para karşılığı pazarlanmasını yasaklıyor. Burada **para el değiştirmiyor**, eşleştirmeyi algoritma yapıyor, her adım denetlenebiliyor.
 
-## The algorithm
+## Neden Monad
 
-Top Trading Cycles (Gale). Under strict preferences TTC is strategyproof and
-selects the strict core; Roth (1982) proved strategyproofness and Ma (1994)
-showed the strong-core rule is the **unique** rule that is Pareto efficient,
-strategyproof and individually rational.
+1. **Sınırı kaldırmak uzun halka demek.** 11 kişilik bir halka tek işlemde 11 sahiplik yazımı. Monad'da bir kuruşun altı; transfer başına gerçek para yakan bir ağda bu ürün ekonomik değil.
+2. **Temizleme problemi NP-hard.** Geniş bir graf tarayıp doğrulamayı zincirde yapıyoruz; işlem başına 30M gas limiti bunu taşıyor.
+3. **Ayrık halkalar ayrı storage sayfalarına dokunur**, Monad'ın paralel yürütücüsü eşzamanlı işler.
 
-`verifyTTCStep(cycle)` checks the TTC invariant on-chain: every item in the cycle
-receives its most-preferred currently-tradeable item. When that holds, the
-outcome is the TTC outcome. This is deliberately **not** a full core check —
-verifying the core directly means enumerating coalitions, which is exponential.
-We do not claim it.
+## Algoritma
 
-## Why Monad specifically
+**Top Trading Cycles** (Gale). Kesin tercihler altında strategyproof ve strict core'da bir dağıtım üretir. Roth (1982) strategyproofness'ı kanıtladı; Ma (1994) bunun Pareto etkinlik + strategyproofness + bireysel akılcılığı birlikte sağlayan **tek kural** olduğunu gösterdi.
 
-1. **Lifting the cap means long cycles, and long cycles mean many transfers.**
-   An 11-party cycle is 11 ownership writes in one transaction. Charged at the
-   100 MON-gwei floor this costs a fraction of a cent; the same product is
-   uneconomic where each transfer costs real money.
-2. **Clearing is NP-hard**, so we search a wide graph and verify on-chain.
-   Monad's 30M per-transaction gas limit carries it.
-3. **Disjoint cycles touch disjoint storage pages**, so Monad's parallel
-   executor settles them concurrently and re-runs only the ones that conflict.
+`verifyTTCStep(cycle)` bu değişmezi zincirde kontrol eder: halkadaki her kadro, o an takas edilebilir en çok istediği kadroyu alıyor mu? Sağlanıyorsa sonuç TTC sonucudur.
 
-## Repository layout
+Bu **tam bir core kontrolü değildir** — core'u doğrudan doğrulamak tüm koalisyonları taramak demektir ve eksponansiyeldir. Böyle bir iddiada bulunmuyoruz.
 
-```
-contracts/Halka.sol        the contract: items, ranked preferences, executeCycle, verifyTTCStep
-scripts/compile.ts         solc-js compile  -> artifacts/Halka.json
-scripts/deploy.ts          deploy with viem -> .env + src/lib/halka.ts
-scripts/setup-wallet.ts    create/fund the deployer via the devnads faucet
-scripts/seed.ts            seed 20 becayis posts, 11 of them a guaranteed ring
-scripts/execute.ts         find cycles and execute the longest one
-src/lib/halka.ts           GENERATED: address, ABI, shared types (frontend imports this)
-src/lib/chain.ts           Monad Testnet chain definition
-src/lib/cycles.ts          cycle finder (depth-limited DFS, greedy disjoint selection)
-src/lib/cities.ts          Turkish cities + map projection
-src/app/api/state          whole board in one snapshot() call, cached 2s
-src/app/api/cycles         cycles + on-chain verifyTTCStep for each
-src/app/api/fund           drips gas to a browser burner wallet
-```
+## Kullanım
 
-## Setup
+Sayfada yönetici rolündesiniz: kadroları ve tercihleri siz girersiniz.
 
-Requires Node 20+.
+1. **Kayıtlı öğretmenler** tablosu kimin nerede olduğunu ve sıralı tercihlerini gösterir
+2. **🎲 30 Öğretmen Yeniden Üret** zincire yeni bir parti yazar, öncekini emekliye ayırır
+3. **+ 5 Öğretmen Ekle** emekliye ayırmadan ekler
+4. **Şu an seçili halka** bulunan bütün halkaları listeler
+5. **Takası Yürüt** seçili halkayı tek işlemde gerçekleştirir
+
+## Kurulum
+
+Node 20+ gerekir.
 
 ```bash
 npm install
-npx tsx scripts/setup-wallet.ts     # creates .env, pulls MON from the faucet
-npx tsx scripts/compile.ts
-npx tsx scripts/deploy.ts           # writes the address into .env and src/lib/halka.ts
-npx tsx scripts/seed.ts             # 20 posts, 11 of them a ring
-npm run dev                         # http://localhost:3000
+npx tsx scripts/setup-wallet.ts   # .env üretir, musluktan MON çeker
+npx tsx scripts/compile.ts        # solc-js
+npx tsx scripts/deploy.ts         # adresi .env ve src/lib/halka.ts içine yazar
+npx tsx scripts/seed.ts           # 20 kadro, 11'i bir halka
+npm run dev
 ```
-
-Verify the seeded ring and execute it:
 
 ```bash
-npx tsx scripts/execute.ts          # dry run: list the cycles it found
-npx tsx scripts/execute.ts --send   # execute the longest one
+npx tsx scripts/execute.ts          # bulunan halkaları listele
+npx tsx scripts/execute.ts --send   # en uzun halkayı yürüt
+npx tsx scripts/verify-claims.ts    # tüm iddiaları zincirde sına
 ```
 
-`.env` holds `PRIVATE_KEY`, `RELAYER_PRIVATE_KEY` and `HALKA_ADDRESS`. It is
-gitignored and contains testnet keys only.
-
-## API
+## Mimari
 
 ```
-GET  /api/state?kind=0   -> { items, wants }
-GET  /api/cycles?kind=0  -> { cycles: [{ items, participants, isTopChoice }] }
-POST /api/fund           -> { ok, txHash }      body: { address }
+contracts/Halka.sol     sahiplik, sıralı tercihler, executeCycle, verifyTTCStep
+scripts/                derleme, deploy, seed, yürütme, doğrulama (solc-js + viem)
+src/lib/halka.ts        ÜRETİLEN: adres, ABI, paylaşılan tipler
+src/lib/cycles.ts       halka bulucu (derinlik sınırlı DFS, açgözlü ayrık seçim)
+src/app/api/state       tüm tahta tek snapshot() çağrısında
+src/app/api/cycles      halkalar + her biri için zincirde verifyTTCStep
+src/app/api/simulate    eth_call ile kuru çalıştırma, gas harcamaz
+src/app/api/seed-random rastgele öğretmen partisi üretir
+src/app/api/fund        tarayıcı cüzdanına gas damlatır
 ```
-`kind` is 0 for becayiş posts and 1 for room-demo stickers.
 
-## Three Monad behaviours that shaped the code
+Hardhat yerine **solc-js + viem** kullandık: Monad dokümanları Windows'ta Hardhat için WSL 2 öneriyor ve tek kontrat için bu zincir gereksizdi.
 
-These cost us real time, so they are written down.
+## Monad'ın bize öğrettiği üç şey
 
-- **Gas is charged on the limit, not on usage** (`value + gas_price * gas_limit`).
-  A loose 6M limit on a seeding call really did burn about 1 MON. Every script
-  pins both the gas limit and `maxFeePerGas`.
-- **Reserve balance: every EOA reserves 10 MON.** A transaction that decrements
-  the balance and leaves the sender below that reserve reverts at execution —
-  the ending balance may dip below it only by the gas spend. An account holding
-  less than 10 MON can therefore only move value through the *emptying
-  transaction* exception, available once every k=3 blocks. Funding twenty
-  fixture wallets concurrently landed exactly one transfer. Transfers are now
-  spaced, and `/api/fund` serialises them.
-- **No global mempool.** Transactions go to the next few leaders, and ones whose
-  nonce is not the account's next are dropped rather than queued, so bursts from
-  a single account need care.
+- **Gas, kullanılan değil limit üzerinden kesiliyor** (`value + gas_price * gas_limit`). Bir seed çağrısına verdiğimiz gevşek 5M limit gerçekten ~0.6 MON yaktı. Artık her script `estimateContractGas` + %20 kullanıyor.
+- **Her EOA 10 MON rezerv tutuyor.** Bakiyeyi rezervin altına düşüren bir işlem execution'da revert eder; tek çıkış, 3 blokta bir kullanılabilen "emptying transaction" istisnası. 20 cüzdanı eşzamanlı fonlamak tam bir transferi tutturdu.
+- **Global mempool yok.** İşlemler sıradaki birkaç lidere gider; nonce'u sırada olmayan işlemler kuyruğa alınmaz, düşer.
 
-## What is NOT finished
+## Bitmemiş olanlar
 
-Stated plainly, because it matters more than hiding it.
+- **Hukuki araç değil, prototip.** Gerçek becayişte atamaya yetkili amirin onayı gerekir; onay akışını modellemedik.
+- Garantiler **leksikografik tercih** varsayar. Genel kayıtsızlıklarda strict core boş olabilir; çok tipli piyasalarda Pareto etkinlik + bireysel akılcılık + strategyproofness'ı birlikte sağlayan mekanizma yoktur.
+- **En iyi ayrık halka kümesini bulmak NP-hard.** Derinlik sınırlı arayıp açgözlü seçiyoruz; optimallik iddia etmiyoruz.
+- Halka **arama** off-chain; **doğrulama ve yürütme** zincirde.
+- Kontratta kadro silme yok. "Yeniden üret" eski partinin tercihlerini temizleyerek emekliye ayırır.
 
-- **This is a prototype, not a legal instrument.** A real becayiş needs the
-  appointing authority's approval; we did not model that approval flow.
-- The guarantees assume **strict, lexicographic preferences**. With general
-  indifferences the strict core can be empty, and in multiple-type markets no
-  mechanism is simultaneously Pareto efficient, individually rational and
-  strategyproof.
-- **Choosing the best set of disjoint cycles is NP-hard.** We search
-  depth-limited and select greedily; we do not claim optimality.
-- Cycle *search* runs off-chain. Cycle *verification and execution* are
-  on-chain, so nobody can execute a cycle that does not exist.
-- The 20 becayiş posts are synthetic fixtures whose preferences are recorded by
-  `seedWants` (admin-only, and only for seeded posts). Room participants sign
-  their own `setWants` from their own wallet.
+## Kaynaklar
 
-## License
+**Algoritma ve teori**
+- Shapley & Scarf, *On Cores and Indivisibility* — housing market modeli ve Gale'in Top Trading Cycles algoritması
+- Roth (1982), *Incentive compatibility in a market with indivisible goods* — TTC'nin strategyproof olduğu
+- Ma (1994), *Strategy-proofness and the strict core in a market with indivisible goods* — teklik teoremi
+- Abraham, Blum & Sandholm, *Clearing Algorithms for Barter Exchange Markets* (EC '07) — döngü uzunluğu kısıtlı temizlemenin NP-hard olduğu ve kısıtın sebebi: *"bir döngüdeki tüm nakiller eşzamanlı yapılmalı"*
+- Sikdar, Adali & Xia (AAAI 2017) — çok tipli piyasalarda MTTC, leksikografik tercihler altında strict-core
+- Hatfield & Milgrom, *Matching with Contracts* (AER) — eşleştirme ve takasın ortak çerçevesi
+
+**Mevzuat ve bağlam**
+- 657 sayılı Devlet Memurları Kanunu, madde 73 — karşılıklı yer değiştirme (becayiş)
+- Eğitim Gücü Sen'in MEB'e merkezi becayiş sistemi başvurusu
+
+**Teknik**
+- [Monad dokümanları](https://docs.monad.xyz) — ağ bilgileri, gas fiyatlaması, rezerv bakiyesi, EIP-7966
+- [devnads Agents API](https://agents.devnads.com) — musluk ve kontrat doğrulama
+- viem, Next.js, solc-js
+
+## Lisans
 
 MIT
