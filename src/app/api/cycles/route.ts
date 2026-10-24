@@ -64,6 +64,14 @@ export async function GET(req: Request) {
         })
       );
 
+      // Top Trading Cycles değişmezini sağlayan halkalar önce gelsin. Rastgele
+      // üretilen tercihler bu değişmezi çoğu zaman sağlamıyor; en uzun halka
+      // başa gelirse garanti paneli varsayılan olarak "false" gösteriyordu.
+      cycles.sort((a, b) => {
+        if (a.isTopChoice !== b.isTopChoice) return a.isTopChoice ? -1 : 1;
+        return b.items.length - a.items.length;
+      });
+
       cache = { at: Date.now(), data: { cycles } };
     }
 
