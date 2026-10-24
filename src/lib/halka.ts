@@ -5,7 +5,7 @@
 
 export { monadTestnet, RPC_URL } from "./chain";
 
-export const HALKA_ADDRESS = "0x73fd05ac40a0f992df2397b91273a28f769f999d" as const;
+export const HALKA_ADDRESS = "0x118bb2018ca413a961f627ebf3b01afd6cd8eee7" as const;
 
 /** 0 = becayis post, 1 = room sticker */
 export type ItemKind = 0 | 1;
@@ -100,6 +100,17 @@ export const HALKA_ABI = [
       }
     ],
     "name": "NotItemOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "itemId",
+        "type": "uint32"
+      }
+    ],
+    "name": "NotSeededItem",
     "type": "error"
   },
   {
@@ -467,6 +478,24 @@ export const HALKA_ABI = [
         "type": "uint32[]"
       }
     ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32[]",
+        "name": "itemIds",
+        "type": "uint32[]"
+      },
+      {
+        "internalType": "uint32[][]",
+        "name": "lists",
+        "type": "uint32[][]"
+      }
+    ],
+    "name": "seedWants",
+    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },

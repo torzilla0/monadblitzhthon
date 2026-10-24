@@ -13,7 +13,7 @@ import { monadTestnet, RPC_URL } from "../src/lib/chain";
 
 const ENV = path.join(process.cwd(), ".env");
 const FAUCET = "https://agents.devnads.com/v1/faucet";
-const TARGET_MON = 4; // enough for deploy + seed + relaying
+const TARGET_MON = 9;
 
 function readEnv(): Record<string, string> {
   if (!fs.existsSync(ENV)) return {};

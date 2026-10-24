@@ -52,6 +52,7 @@ contract Halka {
     error DuplicateWant(uint32 targetId);
     error TooManyWants();
     error UnknownItem(uint32 itemId);
+    error NotSeededItem(uint32 itemId);
     error CycleTooShort();
     error CycleTooLong();
     error RepeatedItemInCycle(uint32 itemId);
@@ -92,6 +93,27 @@ contract Halka {
         }
     }
 
+    /// @notice Record preferences for seeded posts in one admin transaction.
+    /// @dev Only usable on kind-0 (seeded) items, and only by the admin. This is
+    ///      for the synthetic becayis dataset: those 20 "teachers" are fixtures,
+    ///      not real signers. Room participants call setWants themselves with
+    ///      their own wallet -- the admin cannot touch a kind-1 item.
+    ///
+    ///      We need this because every EOA on Monad has a 10 MON reserve balance,
+    ///      and funding 20 fixture accounts well enough to each sign their own
+    ///      transaction fights that mechanism for no product benefit.
+    function seedWants(uint32[] calldata itemIds, uint32[][] calldata lists) external {
+        if (msg.sender != admin) revert OnlyAdmin();
+        if (itemIds.length != lists.length) revert LengthMismatch();
+
+        for (uint256 i = 0; i < itemIds.length; i++) {
+            uint32 id = itemIds[i];
+            if (id == 0 || id > itemCount) revert UnknownItem(id);
+            if (_items[id].kind != 0) revert NotSeededItem(id);
+            _writeWants(id, lists[i]);
+        }
+    }
+
     /// @notice Room demo: claim up to MAX_STICKERS random stickers, once per address.
     /// @dev Pseudo-random by blockhash; good enough for a demo, not secure randomness.
     function claimStickers(uint8 howMany) external returns (uint32[] memory ids) {
@@ -128,6 +150,10 @@ contract Halka {
         Item storage it = _items[itemId];
         if (it.owner != msg.sender) revert NotItemOwner(itemId);
         if (!it.active) revert ItemNotActive(itemId);
+        _writeWants(itemId, rankedTargets);
+    }
+
+    function _writeWants(uint32 itemId, uint32[] calldata rankedTargets) private {
         if (rankedTargets.length > MAX_WANTS) revert TooManyWants();
 
         // clear the old list and its ranks
