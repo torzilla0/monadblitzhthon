@@ -239,3 +239,41 @@ Brief'e göre değişenler:
 Üç rota da testnet'e karşı test edildi ve çalışıyor:
 `/api/state?kind=0`, `/api/cycles?kind=0`, `POST /api/fund`.
 `/api/cycles` şu an 11'li ve 9'lu iki döngü döndürüyor, ikisi de `isTopChoice: true`.
+
+---
+
+## FRONTEND İÇİN TEK İŞ: revert panelini gerçek yap
+
+`TurkeyMap.tsx` içindeki `handleRevertSimulation` şu an **zincire gitmiyor** — sabit
+bir metin yazdırıyor ve o metin yanlış: bizim kontratın hatası `WantMissing` değil
+`TargetNotWanted`, ve `[1,2,12]`'de kopan bağ kadro 12 → 1 değil, **kadro 2 → 12**.
+
+Kurallar "fake on-chain" kabul etmiyor, rubrik de "more real, less mocked" diyor (%24).
+Bunun için gerçek bir rota yazdım. **MON harcamıyor**, sadece `eth_call`:
+
+```
+GET /api/simulate?cycle=1,2,12
+  -> {"ok":false,"cycle":[1,2,12],"error":"TargetNotWanted","args":["2","12"],"transfersThatHappened":0}
+
+GET /api/simulate?cycle=1,2,3,4,5,6,7,8,9,10,11
+  -> {"ok":true,"cycle":[...],"isTopChoice":true,"transfersThatWouldHappen":11}
+```
+
+`handleRevertSimulation`'ı şuna çevir (sabit metni sil):
+
+```ts
+const handleRevertSimulation = async () => {
+  setRevertProofMessage("Zincire soruluyor...");
+  const r = await fetch("/api/simulate?cycle=1,2,12").then((x) => x.json());
+  setRevertProofMessage(
+    r.ok
+      ? `Beklenmedik: zincir bu döngüyü kabul ediyor (${r.transfersThatWouldHappen} transfer).`
+      : `ZİNCİRİN CEVABI: executeCycle([1,2,12]) -> ${r.error}` +
+        (r.args?.length ? ` (kadro ${r.args[0]}, kadro ${r.args[1]}'i istemiyor)` : "") +
+        ` — ${r.transfersThatHappened}/3 transfer gerçekleşti, işlem tamamen revert etti.`
+  );
+};
+```
+
+Böylece paneldeki cümle bizim yazdığımız bir iddia değil, **node'un verdiği cevap** olur.
+Butonun `onClick`'i artık async, `void handleRevertSimulation()` şeklinde çağır.
