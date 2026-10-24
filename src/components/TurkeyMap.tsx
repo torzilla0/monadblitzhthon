@@ -805,7 +805,7 @@ export default function TurkeyMap({
               </a>
             </div>
           ) : revertProofMessage ? (
-            <div className="w-full bg-rose-500/10 border border-rose-500/30 text-rose-200 rounded-xl px-3.5 py-2 font-mono text-xs animate-fade-in flex items-center justify-between gap-2">
+            <div className="w-full bg-rose-500/10 border border-rose-500/30 text-rose-100 rounded-xl px-3.5 py-2.5 text-xs leading-relaxed animate-fade-in flex items-start justify-between gap-3">
               <span>{revertProofMessage}</span>
               <button
                 onClick={() => setRevertProofMessage(null)}
